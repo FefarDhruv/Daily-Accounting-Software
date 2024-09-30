@@ -43,12 +43,14 @@
 
                     </td>
                     <td>
-                        <a href="/edit_purchase_order/{{ order.id }}" class="btn btn-warning btn-sm">Edit</a>
-                        <form action="/delete_purchase_order/{{ order.id }}" method="POST" style="display:inline-block;">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <button type="submit" class="btn btn-danger btn-sm">Delete</button>
-                        </form>
-                    </td>
+    <a href="/edit_purchase_order/{{ order.id }}" class="btn btn-warning btn-sm">Edit</a>
+    <a href="/create_bill?purchase_order_id={{ order.id }}" class="btn btn-primary btn-sm">Create Bill</a> <!-- New button to create a bill -->
+    <form action="/delete_purchase_order/{{ order.id }}" method="POST" style="display:inline-block;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+    </form>
+</td>
+
                 </tr>
                 {% endfor %}
             </tbody>

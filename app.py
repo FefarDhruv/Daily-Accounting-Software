@@ -79,7 +79,40 @@ class PurchaseOrder(db.Model):
     vendor = db.relationship('Vendor', backref=db.backref('purchase_orders', lazy=True))
     line_items = db.relationship('LineItem', backref='purchase_order', lazy=True, cascade="all, delete-orphan")
 
-# Additional routes and logic go here...
+# Define the Bill model
+class Bill(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    bill_number = db.Column(db.String(50), nullable=False)
+    purchase_order_id = db.Column(db.Integer, db.ForeignKey('purchase_order.id'), nullable=False)
+    bill_date = db.Column(db.Date, nullable=False)
+    total_amount = db.Column(db.Float, nullable=False)
+    status = db.Column(db.String(50), nullable=False)
+
+    # Relationship with PurchaseOrder
+    purchase_order = db.relationship('PurchaseOrder', backref=db.backref('bills', lazy=True))
+
+    # The relationship with BillLineItem is established through the backref in BillLineItem
+
+
+
+# Define the BillLineItem model
+class BillLineItem(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    bill_id = db.Column(db.Integer, db.ForeignKey('bill.id'), nullable=False)
+    item_name = db.Column(db.String(100), nullable=False)
+    quantity = db.Column(db.Integer, nullable=False)
+    unit_price = db.Column(db.Float, nullable=False)
+    total_price = db.Column(db.Float, nullable=False)
+
+    # Define the relationship back to the Bill model with a unique backref name
+    bill = db.relationship('Bill', backref=db.backref('line_items', cascade='all, delete-orphan'))
+
+
+    # Use a unique relationship name without using 'bill' to avoid conflict
+    # No need to define a backref here, as the Bill model already has one
+
+
+
 
 
 # Login Page
@@ -135,7 +168,7 @@ def setup_organization():
         email_id = request.form['email_id']
         phone_number = request.form['phone_number']
         address = request.form['address']
-        contact_person = request.form['contact_person']
+        # contact_person = request.form['contact_person']
         org_type = request.form['org_type']
 
         # Create a new organization for setup
@@ -145,7 +178,7 @@ def setup_organization():
             email_id=email_id,
             phone_number=phone_number,
             address=address,
-            contact_person=contact_person,
+            # contact_person=contact_person,
             org_type=org_type
         )
         db.session.add(new_org)
@@ -334,16 +367,168 @@ def vendor_list():
     return render_template('vendor_list.html', vendors=vendors, show_logo=True, active_tab='vendor_list')
 
 
-# Purchase Order List Page
+# Bill List Page
+@app.route('/bill_list')
+@login_required
+def bill_list():
+    organization_id = session.get('organization_id')
+    bills = Bill.query.join(PurchaseOrder).join(Vendor).filter(Vendor.organization_id == organization_id).all()
+    return render_template('bill_list.html', bills=bills, show_logo=True, active_tab='bill_list')
+
+
+@app.route('/bill')
+@login_required
+def bill():
+    # Retrieve the organization ID from the session to filter bills for the logged-in user's organization
+    organization_id = session.get('organization_id')
+
+    # Query the bills associated with this organization
+    bills = Bill.query.join(PurchaseOrder).join(Vendor).filter(Vendor.organization_id == organization_id).all()
+
+    # Render the bill_list template with the bills data
+    return render_template('bill_list.html', bills=bills, show_logo=True, active_tab='bill_list')
+
+
+# Route definition
+# Create New Bill (Bill Form)
+@app.route('/create_bill', methods=['GET', 'POST'])
+@login_required
+def create_bill():
+    if request.method == 'POST':
+        # Basic Bill Details
+        bill_number = request.form['bill_number']
+        purchase_order_id = request.form['purchase_order_id']
+        bill_date = datetime.strptime(request.form['bill_date'], '%Y-%m-%d')
+        status = request.form['status']
+
+        # Calculate Total Amount based on line items
+        total_amount = 0
+
+        # Create a New Bill Object
+        new_bill = Bill(
+            bill_number=bill_number,
+            purchase_order_id=purchase_order_id,
+            bill_date=bill_date,
+            total_amount=0,  # Will update later after adding line items
+            status=status
+        )
+        db.session.add(new_bill)
+        db.session.commit()
+
+        # Handle Line Items
+        item_names = request.form.getlist('item_name[]')
+        quantities = request.form.getlist('quantity[]')
+        unit_prices = request.form.getlist('unit_price[]')
+
+        for item_name, quantity, unit_price in zip(item_names, quantities, unit_prices):
+            # Calculate the total price for the line item
+            quantity = int(quantity)
+            unit_price = float(unit_price)
+            total_price = quantity * unit_price
+
+            # Create and add a new line item for the bill
+            new_line_item = BillLineItem(
+                bill_id=new_bill.id,
+                item_name=item_name,
+                quantity=quantity,
+                unit_price=unit_price,
+                total_price=total_price
+            )
+            db.session.add(new_line_item)
+
+            # Update the total amount of the bill
+            total_amount += total_price
+
+        # Update the total amount of the bill and commit changes
+        new_bill.total_amount = total_amount
+        db.session.commit()
+
+        flash('Bill created successfully!', 'success')
+        return redirect(url_for('bill_list'))
+
+    # Load purchase orders to show in dropdown
+    purchase_orders = PurchaseOrder.query.all()
+    return render_template('bill_form.html', purchase_orders=purchase_orders, show_logo=True, active_tab='bill_list')
+
+
+# Edit Bill
+# Edit Bill
+@app.route('/edit_bill/<int:bill_id>', methods=['GET', 'POST'])
+@login_required
+def edit_bill(bill_id):
+    bill = Bill.query.get_or_404(bill_id)
+
+    if request.method == 'POST':
+        # Update Bill Details
+        bill.bill_number = request.form['bill_number']
+        bill.purchase_order_id = request.form['purchase_order_id']
+        bill.bill_date = datetime.strptime(request.form['bill_date'], '%Y-%m-%d')
+        bill.status = request.form['status']
+
+        # Calculate new total amount based on line items
+        total_amount = 0
+
+        # Delete existing line items
+        BillLineItem.query.filter_by(bill_id=bill.id).delete()
+
+        # Handle Line Items
+        item_names = request.form.getlist('item_name[]')
+        quantities = request.form.getlist('quantity[]')
+        unit_prices = request.form.getlist('unit_price[]')
+
+        for item_name, quantity, unit_price in zip(item_names, quantities, unit_prices):
+            # Calculate total price for the line item
+            quantity = int(quantity)
+            unit_price = float(unit_price)
+            total_price = quantity * unit_price
+
+            # Create a new line item
+            new_line_item = BillLineItem(
+                bill_id=bill.id,
+                item_name=item_name,
+                quantity=quantity,
+                unit_price=unit_price,
+                total_price=total_price
+            )
+            db.session.add(new_line_item)
+
+            # Update the total amount of the bill
+            total_amount += total_price
+
+        # Update the total amount of the bill and commit changes
+        bill.total_amount = total_amount
+        db.session.commit()
+
+        flash('Bill updated successfully!', 'success')
+        return redirect(url_for('bill_list'))
+
+    # Load purchase orders to show in dropdown and existing line items for the bill
+    purchase_orders = PurchaseOrder.query.all()
+    return render_template('bill_form.html', bill=bill, purchase_orders=purchase_orders, show_logo=True, active_tab='bill_list')
+
+
+# Delete Bill
+@app.route('/delete_bill/<int:bill_id>', methods=['POST'])
+@login_required
+def delete_bill(bill_id):
+    bill = Bill.query.get_or_404(bill_id)
+    try:
+        db.session.delete(bill)
+        db.session.commit()
+        flash('Bill deleted successfully!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'An error occurred while deleting the bill: {str(e)}', 'danger')
+
+    return redirect(url_for('bill_list'))
+
+# Purchase Order List with "Create Bill" Option
 @app.route('/purchase_order_list')
 @login_required
 def purchase_order_list():
-    # Fetch only purchase orders related to the logged-in user's organization
     organization_id = session.get('organization_id')
     purchase_orders = PurchaseOrder.query.join(Vendor).filter(Vendor.organization_id == organization_id).all()
     return render_template('purchase_order_list.html', purchase_orders=purchase_orders, show_logo=True, active_tab='purchase_order')
-
-
 # Add New Purchase Order (Purchase Order Form)
 @app.route('/purchase_order', methods=['GET', 'POST'])
 @login_required

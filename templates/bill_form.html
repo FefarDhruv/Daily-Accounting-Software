@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+
+{% block title %}Create/Edit Bill{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2>{% if bill %}Edit Bill{% else %}Create Bill{% endif %}</h2>
+
+    <form action="{{ url_for('create_bill') if not bill else url_for('edit_bill', bill_id=bill.id) }}" method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="form-group">
+            <label for="bill_number">Bill Number:</label>
+            <input type="text" class="form-control" id="bill_number" name="bill_number" value="{{ bill.bill_number if bill else '' }}" required>
+        </div>
+
+        <div class="form-group">
+            <label for="purchase_order_id">Purchase Order:</label>
+            <select class="form-control" id="purchase_order_id" name="purchase_order_id" required>
+                {% for order in purchase_orders %}
+                <option value="{{ order.id }}" {% if bill and bill.purchase_order_id == order.id %}selected{% endif %}>{{ order.id }} - {{ order.vendor.vendor_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="bill_date">Bill Date:</label>
+            <input type="date" class="form-control" id="bill_date" name="bill_date" value="{{ bill.bill_date if bill else '' }}" required>
+        </div>
+
+        <div class="form-group">
+            <label for="status">Status:</label>
+            <select class="form-control" id="status" name="status" required>
+                <option value="Pending" {% if bill and bill.status == 'Pending' %}selected{% endif %}>Pending</option>
+                <option value="Paid" {% if bill and bill.status == 'Paid' %}selected{% endif %}>Paid</option>
+                <option value="Cancelled" {% if bill and bill.status == 'Cancelled' %}selected{% endif %}>Cancelled</option>
+            </select>
+        </div>
+
+        <!-- Line Items Table -->
+        <h4>Line Items</h4>
+        <table class="table table-bordered" id="lineItemsTable">
+            <thead>
+                <tr>
+                    <th>Item Name</th>
+                    <th>Quantity</th>
+                    <th>Unit Price</th>
+                    <th>Total Price</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% if bill and bill.bill_line_items %}
+                    {% for line_item in bill.bill_line_items %}
+                    <tr>
+                        <td><input type="text" name="item_name[]" class="form-control" value="{{ line_item.item_name }}" required></td>
+                        <td><input type="number" name="quantity[]" class="form-control" value="{{ line_item.quantity }}" required></td>
+                        <td><input type="number" step="0.01" name="unit_price[]" class="form-control" value="{{ line_item.unit_price }}" required></td>
+                        <td><input type="number" step="0.01" name="total_price[]" class="form-control" value="{{ line_item.quantity * line_item.unit_price }}" readonly></td>
+                        <td><button type="button" class="btn btn-danger remove-row">Remove</button></td>
+                    </tr>
+                    {% endfor %}
+                {% else %}
+                <!-- Empty Row to Start -->
+                <tr>
+                    <td><input type="text" name="item_name[]" class="form-control" required></td>
+                    <td><input type="number" name="quantity[]" class="form-control" required></td>
+                    <td><input type="number" step="0.01" name="unit_price[]" class="form-control" required></td>
+                    <td><input type="number" step="0.01" name="total_price[]" class="form-control" readonly></td>
+                    <td><button type="button" class="btn btn-danger remove-row">Remove</button></td>
+                </tr>
+                {% endif %}
+            </tbody>
+        </table>
+
+        <button type="button" class="btn btn-success" id="addRowBtn">Add Row</button>
+
+        <div class="text-right mt-4">
+            <button type="submit" class="btn btn-primary">{% if bill %}Update{% else %}Create{% endif %} Bill</button>
+            <a href="{{ url_for('bill_list') }}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<!-- Include jQuery for simplicity -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+<script>
+$(document).ready(function() {
+    // Function to calculate total price per line item
+    function calculateTotalPrice(row) {
+        var quantity = parseFloat(row.find('input[name="quantity[]"]').val()) || 0;
+        var unitPrice = parseFloat(row.find('input[name="unit_price[]"]').val()) || 0;
+        var totalPrice = quantity * unitPrice;
+        row.find('input[name="total_price[]"]').val(totalPrice.toFixed(2));
+    }
+
+    // Event Listener for Quantity or Unit Price change to calculate total price
+    $('#lineItemsTable').on('input', 'input[name="quantity[]"], input[name="unit_price[]"]', function() {
+        var row = $(this).closest('tr');
+        calculateTotalPrice(row);
+    });
+
+    // Add Row Button Click
+    $('#addRowBtn').click(function() {
+        var newRow = `<tr>
+            <td><input type="text" name="item_name[]" class="form-control" required></td>
+            <td><input type="number" name="quantity[]" class="form-control" required></td>
+            <td><input type="number" step="0.01" name="unit_price[]" class="form-control" required></td>
+            <td><input type="number" step="0.01" name="total_price[]" class="form-control" readonly></td>
+            <td><button type="button" class="btn btn-danger remove-row">Remove</button></td>
+        </tr>`;
+        $('#lineItemsTable tbody').append(newRow);
+    });
+
+    // Remove Row Button Click
+    $('#lineItemsTable').on('click', '.remove-row', function() {
+        $(this).closest('tr').remove();
+    });
+});
+</script>
+{% endblock %}
