@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Add Multiple Users</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            display: flex;
+            height: 100vh;
+            justify-content: center;
+            align-items: center;
+            background-color: #f5f5f5;
+        }
+        .add-user-container {
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+            width: 100%;
+            max-width: 800px;
+        }
+        .add-user-logo {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .add-user-btn {
+            width: 100%;
+        }
+        .form-section-title {
+            font-size: 18px;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+        .remove-user-btn {
+            margin-top: 10px;
+            background-color: #e74c3c;
+            color: white;
+            width: 100%;
+        }
+        .spaced-buttons {
+            margin-top: 20px; /* Add space between buttons */
+        }
+    </style>
+</head>
+<body>
+
+<div class="add-user-container">
+    <div class="row">
+        <!-- Title Section -->
+        <div class="col-md-12 add-user-logo">
+            <h3><span style="background-color:black;color:white;padding:5px;">SHREE</span> <span style="font-weight:bold;">ACCOUNTING</span></h3>
+            <h4>Add Multiple Users</h4>
+        </div>
+
+        <!-- Form Section -->
+        <div class="col-md-12">
+            <form method="POST" action="/add_users">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div id="user-forms">
+                    <!-- User 1 Fields -->
+                    <div class="user-form-group">
+                        <h5>User 1</h5>
+                        <!-- Username Field -->
+                        <div class="form-group">
+                            <label for="username" class="form-section-title">Username</label>
+                            <input type="text" class="form-control" name="username[]" placeholder="Enter Username" required>
+                        </div>
+
+                        <!-- Password Field -->
+                        <div class="form-group">
+                            <label for="password" class="form-section-title">Password</label>
+                            <input type="password" class="form-control" name="password[]" placeholder="Enter Password" required>
+                        </div>
+
+                        <!-- Role Dropdown -->
+                        <div class="form-group">
+                            <label for="role" class="form-section-title">Role</label>
+                            <select class="form-control" name="role[]" required>
+                                <option value="Admin">Admin</option>
+                                <option value="Manager">Manager</option>
+                                <option value="Accountant">Accountant</option>
+                                <option value="Employee">Employee</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Add More Users Button -->
+                <button type="button" class="btn btn-dark add-user-btn spaced-buttons" id="addUserBtn">Add Another User</button>
+
+                <!-- Submit Button -->
+                <button type="submit" class="btn btn-dark add-user-btn spaced-buttons">Submit Users</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Bootstrap JS and dependencies -->
+<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.2/dist/umd/popper.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+
+<script>
+    let userCount = 1;
+
+    document.getElementById('addUserBtn').addEventListener('click', function() {
+        userCount++;
+
+        // Create new user input fields
+        let userFields = `
+            <div class="user-form-group mt-4">
+                <h5>User ${userCount}</h5>
+                <div class="form-group">
+                    <label for="username" class="form-section-title">Username</label>
+                    <input type="text" class="form-control" name="username[]" placeholder="Enter Username" required>
+                </div>
+                <div class="form-group">
+                    <label for="password" class="form-section-title">Password</label>
+                    <input type="password" class="form-control" name="password[]" placeholder="Enter Password" required>
+                </div>
+                <div class="form-group">
+                    <label for="role" class="form-section-title">Role</label>
+                    <select class="form-control" name="role[]" required>
+                        <option value="Admin">Admin</option>
+                        <option value="Manager">Manager</option>
+                        <option value="Accountant">Accountant</option>
+                        <option value="Employee">Employee</option>
+                    </select>
+                </div>
+                <button type="button" class="btn remove-user-btn" onclick="removeUser(this)">Remove User</button>
+            </div>
+        `;
+
+        // Append the new fields
+        document.getElementById('user-forms').insertAdjacentHTML('beforeend', userFields);
+    });
+
+    // Function to remove user form
+    function removeUser(button) {
+        button.closest('.user-form-group').remove();
+    }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Purchase Order{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2>Edit Purchase Order</h2>
+    <form method="POST" action="/edit_purchase_order/{{ order.id }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="form-group">
+            <label for="vendor_id">Select Vendor</label>
+            <select class="form-control" id="vendor_id" name="vendor_id" required>
+                {% for vendor in vendors %}
+                <option value="{{ vendor.id }}" {% if vendor.id == order.vendor_id %}selected{% endif %}>
+                    {{ vendor.vendor_name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="order_date">Order Date</label>
+            <input type="date" class="form-control" id="order_date" name="order_date" value="{{ order.order_date }}" required>
+        </div>
+
+        <div class="form-group">
+            <label for="total_amount">Total Amount</label>
+            <input type="number" class="form-control" id="total_amount" name="total_amount" value="{{ order.total_amount }}" step="0.01" required>
+        </div>
+
+        <div class="form-group">
+            <label for="status">Status</label>
+            <select class="form-control" id="status" name="status" required>
+                <option value="Pending" {% if order.status == 'Pending' %}selected{% endif %}>Pending</option>
+                <option value="Completed" {% if order.status == 'Completed' %}selected{% endif %}>Completed</option>
+                <option value="Cancelled" {% if order.status == 'Cancelled' %}selected{% endif %}>Cancelled</option>
+            </select>
+        </div>
+
+        <!-- Line Items Section -->
+        <h4>Line Items</h4>
+        <div class="form-group">
+            {% for line_item in line_items %}
+            <div class="form-row mb-2">
+                <input type="hidden" name="item_id[]" value="{{ line_item.id }}">
+                <div class="col">
+                    <label>Item Name</label>
+                    <input type="text" class="form-control" name="item_name[]" value="{{ line_item.item_name }}" required>
+                </div>
+                <div class="col">
+                    <label>Quantity</label>
+                    <input type="number" class="form-control" name="quantity[]" value="{{ line_item.quantity }}" required>
+                </div>
+                <div class="col">
+                    <label>Unit Price</label>
+                    <input type="number" class="form-control" name="unit_price[]" value="{{ line_item.unit_price }}" step="0.01" required>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <button type="submit" class="btn btn-dark">Update Purchase Order</button>
+    </form>
+</div>
+{% endblock %}

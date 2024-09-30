@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+
+{% block title %}Purchase Order List{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2>Purchase Order List</h2>
+
+    <!-- Toggle Button for Switching Views -->
+    <div class="text-center mb-4">
+        <button class="btn btn-info" id="toggleViewBtn">Switch to Kanban View</button>
+    </div>
+
+    <!-- Table View (added ID for toggling) -->
+    <div id="tableView" class="container mt-5">
+        <h2>Purchase Order List</h2>
+        <table class="table table-bordered">
+            <thead>
+                <tr>
+                    <th>Vendor Name</th>
+                    <th>Order Date</th>
+                    <th>Total Amount</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for order in purchase_orders %}
+                <tr>
+                    <td>{{ order.vendor.vendor_name }}</td>
+                    <td>{{ order.order_date }}</td>
+                    <td>{{ order.total_amount }}</td>
+                    <td>
+                        <form action="/update_status/{{ order.id }}" method="POST">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <select name="status" class="form-control" onchange="this.form.submit()">
+                                <option value="Pending" {% if order.status == 'Pending' %}selected{% endif %}>Pending</option>
+                                <option value="Completed" {% if order.status == 'Completed' %}selected{% endif %}>Completed</option>
+                                <option value="Cancelled" {% if order.status == 'Cancelled' %}selected{% endif %}>Cancelled</option>
+                            </select>
+                        </form>
+                    </td>
+                    <td>
+                        <a href="/edit_purchase_order/{{ order.id }}" class="btn btn-warning btn-sm">Edit</a>
+                        <form action="/delete_purchase_order/{{ order.id }}" method="POST" style="display:inline-block;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Kanban View -->
+    <div id="kanbanView" style="display: none;">
+        <div class="row">
+            <!-- Pending Column -->
+            <div class="col-md-4">
+                <h3>Pending</h3>
+                <ul id="pending" class="list-group kanban-column">
+                    {% for order in purchase_orders if order.status == 'Pending' %}
+                    <li class="list-group-item" data-id="{{ order.id }}">
+                        <strong>{{ order.vendor.vendor_name }}</strong><br>
+                        Order Date: {{ order.order_date }}<br>
+                        Total: {{ order.total_amount }}<br>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <!-- Completed Column -->
+            <div class="col-md-4">
+                <h3>Completed</h3>
+                <ul id="completed" class="list-group kanban-column">
+                    {% for order in purchase_orders if order.status == 'Completed' %}
+                    <li class="list-group-item" data-id="{{ order.id }}">
+                        <strong>{{ order.vendor.vendor_name }}</strong><br>
+                        Order Date: {{ order.order_date }}<br>
+                        Total: {{ order.total_amount }}<br>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <!-- Cancelled Column -->
+            <div class="col-md-4">
+                <h3>Cancelled</h3>
+                <ul id="cancelled" class="list-group kanban-column">
+                    {% for order in purchase_orders if order.status == 'Cancelled' %}
+                    <li class="list-group-item" data-id="{{ order.id }}">
+                        <strong>{{ order.vendor.vendor_name }}</strong><br>
+                        Order Date: {{ order.order_date }}<br>
+                        Total: {{ order.total_amount }}<br>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add New Record Button -->
+    <div class="text-center mt-4">
+        <a href="/purchase_order" class="btn btn-dark">Add New Record</a>
+    </div>
+</div>
+
+<!-- Include Sortable.js for drag-and-drop functionality -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+
+<script>
+// Initialize Sortable.js for each Kanban column
+['pending', 'completed', 'cancelled'].forEach(function(status) {
+    new Sortable(document.getElementById(status), {
+        group: 'kanban',
+        animation: 150,
+        onEnd: function(evt) {
+            let orderId = evt.item.getAttribute('data-id');
+            let newStatus = evt.to.id;
+            updateOrderStatus(orderId, newStatus);
+        }
+    });
+});
+
+// Function to update order status via AJAX
+function updateOrderStatus(orderId, newStatus) {
+    fetch(`/update_order_status/${orderId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'  // Ensure you have CSRF protection
+        },
+        body: JSON.stringify({ status: newStatus })
+    }).then(response => {
+        if (response.ok) {
+            console.log(`Order ${orderId} updated to ${newStatus}`);
+        } else {
+            console.error('Failed to update order status');
+        }
+    });
+}
+
+// Toggle between Table and Kanban view
+const toggleBtn = document.getElementById('toggleViewBtn');
+const tableView = document.getElementById('tableView');
+const kanbanView = document.getElementById('kanbanView');
+
+toggleBtn.addEventListener('click', function() {
+    if (tableView.style.display === 'none') {
+        tableView.style.display = 'block';
+        kanbanView.style.display = 'none';
+        toggleBtn.textContent = 'Switch to Kanban View';
+    } else {
+        tableView.style.display = 'none';
+        kanbanView.style.display = 'block';
+        toggleBtn.textContent = 'Switch to Table View';
+    }
+});
+</script>
+
+<style>
+.kanban-column {
+    min-height: 300px;
+    background-color: #f8f9fa;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+}
+.list-group-item {
+    cursor: grab;
+}
+</style>
+{% endblock %}

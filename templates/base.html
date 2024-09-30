@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}SHREE ACCOUNTING{% endblock %}</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .logo {
+            margin-top: 20px;
+        }
+        .nav-tabs {
+            margin-bottom: 20px;
+        }
+        .nav-tabs .nav-link {
+            color: #000;
+        }
+        .nav-tabs .nav-link.active {
+            border-color: #000 #000 #fff;
+            color: #000;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+<!-- Logo Section -->
+{% if show_logo %}
+<div class="text-center logo">
+    <h3><span style="background-color:black;color:white;padding:5px;">SHREE</span> <span style="font-weight:bold;">ACCOUNTING</span></h3>
+</div>
+{% endif %}
+
+<!-- Navigation Tabs -->
+<ul class="nav nav-tabs">
+    <li class="nav-item">
+        <a class="nav-link {% if active_tab == 'dashboard' %}active{% endif %}" href="/dashboard">Dashboard</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if active_tab == 'vendor_master' %}active{% endif %}" href="/vendor_list">Vendors</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if active_tab == 'organization_master' %}active{% endif %}" href="/organization_master">Organization</a>
+    </li>
+    <li class="nav-item">
+    <a class="nav-link {% if active_tab == 'purchase_order' %}active{% endif %}" href="/purchase_order_list">Purchase Order</a>
+    </li>
+
+    <li class="nav-item">
+        <a class="nav-link {% if active_tab == 'bill' %}active{% endif %}" href="/bill">Bill</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if active_tab == 'customer' %}active{% endif %}" href="/customer">Customer</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if active_tab == 'quote' %}active{% endif %}" href="/quote">Quote</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if active_tab == 'sales_order' %}active{% endif %}" href="/sales_order">Sales Order</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if active_tab == 'invoice' %}active{% endif %}" href="/invoice">Invoice</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if active_tab == 'shipment' %}active{% endif %}" href="/shipment">Shipment</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if active_tab == 'inventory' %}active{% endif %}" href="/inventory">Inventory</a>
+    </li>
+</ul>
+
+<!-- Content Section -->
+<div class="container">
+    {% block content %}
+    {% endblock %}
+</div>
+
+<!-- Bootstrap JS and dependencies -->
+<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.2/dist/umd/popper.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+
+</body>
+</html>

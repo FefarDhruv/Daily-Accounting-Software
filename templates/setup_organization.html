@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Setup Organization</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            display: flex;
+            height: 100vh;
+            justify-content: center;
+            align-items: center;
+            background-color: #f5f5f5;
+        }
+        .setup-container {
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+            width: 100%;
+            max-width: 600px;
+        }
+        .setup-logo {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .setup-btn {
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+
+<div class="setup-container">
+    <div class="row">
+        <!-- Title Section -->
+        <div class="col-md-12 setup-logo">
+            <h3><span style="background-color:black;color:white;padding:5px;">SHREE</span> <span style="font-weight:bold;">ACCOUNTING</span></h3>
+            <h4>Setup New Organization</h4>
+        </div>
+
+        <!-- Form Section -->
+        <div class="col-md-12">
+            <form method="POST" action="/setup_organization">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="form-group">
+                    <label for="org_name">Organization Name</label>
+                    <input type="text" class="form-control" id="org_name" name="org_name" placeholder="Organization Name" required>
+                </div>
+                <div class="form-group">
+                    <label for="gst_number">GST Number</label>
+                    <input type="text" class="form-control" id="gst_number" name="gst_number" placeholder="GST Number" required>
+                </div>
+                <div class="form-group">
+                    <label for="email_id">Email ID</label>
+                    <input type="email" class="form-control" id="email_id" name="email_id" placeholder="Email ID" required>
+                </div>
+                <div class="form-group">
+                    <label for="phone_number">Phone Number</label>
+                    <input type="text" class="form-control" id="phone_number" name="phone_number" placeholder="Phone Number" required>
+                </div>
+                <div class="form-group">
+                    <label for="address">Address</label>
+                    <input type="text" class="form-control" id="address" name="address" placeholder="Address" required>
+                </div>
+                <div class="form-group">
+                    <label for="contact_person">Contact Person</label>
+                    <input type="text" class="form-control" id="contact_person" name="contact_person" placeholder="Contact Person" required>
+                </div>
+                <div class="form-group">
+                    <label for="org_type">Organization Type</label>
+                    <select class="form-control" id="org_type" name="org_type" required>
+                        <option value="Private">Private</option>
+                        <option value="Public">Public</option>
+                        <option value="Non-Profit">Non-Profit</option>
+                        <option value="Government">Government</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn btn-dark setup-btn">Submit</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Bootstrap JS and dependencies -->
+<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.2/dist/umd/popper.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+
+</body>
+</html>
