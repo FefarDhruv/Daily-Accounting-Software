@@ -1,0 +1,43 @@
+<!-- bill_list.html -->
+{% extends "base.html" %}
+
+{% block title %}Bill List{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2>Bill List</h2>
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>Bill Number</th>
+                <th>Vendor Name</th>
+                <th>Bill Date</th>
+                <th>Total Amount</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for bill in bills %}
+            <tr>
+                <td>{{ bill.bill_number }}</td>
+                <td>{{ bill.purchase_order.vendor.vendor_name }}</td>
+                <td>{{ bill.bill_date }}</td>
+                <td>{{ bill.total_amount }}</td>
+                <td>{{ bill.status }}</td>
+                <td>
+                    <a href="/edit_bill/{{ bill.id }}" class="btn btn-warning btn-sm">Edit</a>
+                    <form action="/delete_bill/{{ bill.id }}" method="POST" style="display:inline-block;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <div class="text-center mt-4">
+        <a href="/create_bill" class="btn btn-dark">Add New Bill</a>
+    </div>
+</div>
+{% endblock %}
