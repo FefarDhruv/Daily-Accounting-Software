@@ -1,0 +1,82 @@
+<!-- organization_master.html -->
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2 class="text-center">{{ 'Edit' if organization else 'Add New' }} Organization</h2>
+
+    <!-- Include the CSRF token -->
+    <form method="POST" action="{{ url_for('edit_organization', organization_id=organization.id) if organization else url_for('organization_master') }}">
+        <!-- Add CSRF Token for CSRF protection -->
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="form-group">
+            <label for="org_name">Organization Name</label>
+            <input type="text" class="form-control" id="org_name" name="org_name" placeholder="Organization Name"
+                   value="{{ organization.org_name if organization else '' }}" required>
+        </div>
+
+        <div class="form-group">
+            <label for="org_type">Type</label>
+            <select class="form-control" id="org_type" name="org_type" required>
+                <option value="Supplier" {% if organization and organization.org_type == "Supplier" %}selected{% endif %}>Supplier</option>
+                <option value="Customer" {% if organization and organization.org_type == "Customer" %}selected{% endif %}>Customer</option>
+                <option value="Partner" {% if organization and organization.org_type == "Partner" %}selected{% endif %}>Partner</option>
+                <option value="Other" {% if organization and organization.org_type == "Other" %}selected{% endif %}>Other</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="business_type">Business Type</label>
+            <select class="form-control" id="business_type" name="business_type" onchange="toggleGSTField()" required>
+                <option value="Overseas" {% if organization and organization.business_type == "Overseas" %}selected{% endif %}>Overseas</option>
+                <option value="GST Registered" {% if organization and organization.business_type == "GST Registered" %}selected{% endif %}>GST Registered</option>
+                <option value="Not Registered" {% if organization and organization.business_type == "Not Registered" %}selected{% endif %}>Not Registered</option>
+            </select>
+        </div>
+
+        <!-- GST Number Field (Show/Hide based on Business Type) -->
+        <div class="form-group" id="gst_field" style="display: {% if organization and organization.business_type == 'GST Registered' %}block{% else %}none{% endif %};">
+            <label for="gst_number">GST Number</label>
+            <input type="text" class="form-control" id="gst_number" name="gst_number" placeholder="GST Number"
+                   value="{{ organization.gst_number if organization else '' }}">
+        </div>
+
+        <div class="form-group">
+            <label for="email_id">Email ID</label>
+            <input type="email" class="form-control" id="email_id" name="email_id" placeholder="Email ID"
+                   value="{{ organization.email_id if organization else '' }}" required>
+        </div>
+
+        <div class="form-group">
+            <label for="phone_number">Phone Number</label>
+            <input type="text" class="form-control" id="phone_number" name="phone_number" placeholder="Phone Number"
+                   value="{{ organization.phone_number if organization else '' }}" required>
+        </div>
+
+        <div class="form-group">
+            <label for="address">Address</label>
+            <input type="text" class="form-control" id="address" name="address" placeholder="Address"
+                   value="{{ organization.address if organization else '' }}" required>
+        </div>
+
+        <button type="submit" class="btn btn-primary">{{ 'Save Changes' if organization else 'Add Organization' }}</button>
+    </form>
+</div>
+
+<script>
+    function toggleGSTField() {
+        var businessType = document.getElementById("business_type").value;
+        var gstField = document.getElementById("gst_field");
+
+        if (businessType === "GST Registered") {
+            gstField.style.display = "block";
+            document.getElementById("gst_number").required = true;
+        } else {
+            gstField.style.display = "none";
+            document.getElementById("gst_number").required = false;
+            document.getElementById("gst_number").value = '';  // Clear GST field if hidden
+        }
+    }
+</script>
+{% endblock %}
