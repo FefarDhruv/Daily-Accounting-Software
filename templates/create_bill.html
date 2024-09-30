@@ -6,32 +6,26 @@
 <div class="container mt-5">
     <h2>Create Bill</h2>
     <form action="{{ url_for('create_bill') }}" method="POST">
-        <!-- CSRF Token for form security -->
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-        <!-- Bill Number Field -->
         <div class="form-group">
             <label for="bill_number">Bill Number:</label>
-            <input type="text" class="form-control" id="bill_number" name="bill_number" required>
+            <input type="text" class="form-control" id="bill_number" name="bill_number" value="{% if bill %}{{ bill.bill_number }}{% endif %}" required>
         </div>
-
-        <!-- Purchase Order Selection -->
         <div class="form-group">
             <label for="purchase_order_id">Select Purchase Order:</label>
             <select class="form-control" id="purchase_order_id" name="purchase_order_id" onchange="loadPurchaseOrderItems()" required>
                 <option value="">-- Select Purchase Order --</option>
                 {% for order in purchase_orders %}
-                <option value="{{ order.id }}" {% if purchase_order and purchase_order.id == order.id %}selected{% endif %}>
+                <option value="{{ order.id }}" {% if bill and bill.purchase_order_id == order.id %}selected{% endif %}>
                     {{ order.id }} - {{ order.vendor.vendor_name }} ({{ order.total_amount }})
                 </option>
                 {% endfor %}
             </select>
         </div>
-
-        <!-- Bill Date Field -->
         <div class="form-group">
             <label for="bill_date">Bill Date:</label>
-            <input type="date" class="form-control" id="bill_date" name="bill_date" required>
+            <input type="date" class="form-control" id="bill_date" name="bill_date" value="{% if bill %}{{ bill.bill_date.strftime('%Y-%m-%d') }}{% endif %}" required>
         </div>
 
         <!-- Line Items Table -->
@@ -44,67 +38,41 @@
                         <th>Quantity</th>
                         <th>Unit Price</th>
                         <th>Total</th>
-                        <th>Action</th> <!-- Column for Remove button -->
                     </tr>
                 </thead>
                 <tbody id="lineItemsBody">
-                    <!-- Existing purchase order line items will be dynamically inserted here -->
+                    {% for item in purchase_order_line_items %}
+                    <tr>
+                        <td><input type="text" class="form-control" name="item_name[]" value="{{ item.item_name }}" required></td>
+                        <td><input type="number" class="form-control" name="quantity[]" value="{{ item.quantity }}" onchange="calculateTotalAmount()" required></td>
+                        <td><input type="number" step="0.01" class="form-control" name="unit_price[]" value="{{ item.unit_price }}" onchange="calculateTotalAmount()" required></td>
+                        <td class="line-item-total">{{ item.quantity * item.unit_price }}</td>
+                    </tr>
+                    {% endfor %}
                 </tbody>
             </table>
-            <!-- Button to add a new line item -->
-            <button type="button" class="btn btn-secondary" onclick="addLineItem()">Add Line Item</button>
         </div>
 
         <!-- Total Amount Display -->
         <div class="form-group">
             <label for="total_amount">Total Amount:</label>
-            <input type="text" class="form-control" id="total_amount" name="total_amount" readonly>
+            <input type="text" class="form-control" id="total_amount" name="total_amount" value="{% if bill %}{{ bill.total_amount }}{% endif %}" readonly>
         </div>
 
-        <!-- Status Selection -->
         <div class="form-group">
             <label for="status">Status:</label>
             <select class="form-control" id="status" name="status" required>
-                <option value="Pending">Pending</option>
-                <option value="Completed">Completed</option>
-                <option value="Cancelled">Cancelled</option>
+                <option value="Pending" {% if bill and bill.status == 'Pending' %}selected{% endif %}>Pending</option>
+                <option value="Completed" {% if bill and bill.status == 'Completed' %}selected{% endif %}>Completed</option>
+                <option value="Cancelled" {% if bill and bill.status == 'Cancelled' %}selected{% endif %}>Cancelled</option>
             </select>
         </div>
 
-        <!-- Submit Button -->
         <button type="submit" class="btn btn-primary">Create Bill</button>
     </form>
 </div>
 
-<!-- JavaScript for Handling Dynamic Line Items and Total Calculation -->
 <script>
-    // Function to add a new line item row to the table
-    function addLineItem() {
-        let lineItemsBody = document.getElementById('lineItemsBody');
-
-        // Create a new row
-        let newRow = document.createElement('tr');
-
-        // Add columns with input fields
-        newRow.innerHTML = `
-            <td><input type="text" class="form-control" name="item_name[]" required></td>
-            <td><input type="number" class="form-control" name="quantity[]" value="1" onchange="calculateTotalAmount()" required></td>
-            <td><input type="number" step="0.01" class="form-control" name="unit_price[]" value="0.00" onchange="calculateTotalAmount()" required></td>
-            <td class="line-item-total">0.00</td>
-            <td><button type="button" class="btn btn-danger" onclick="removeLineItem(this)">Remove</button></td>
-        `;
-
-        // Append the new row to the table
-        lineItemsBody.appendChild(newRow);
-    }
-
-    // Function to remove a line item row
-    function removeLineItem(button) {
-        let row = button.parentNode.parentNode;
-        row.parentNode.removeChild(row);
-        calculateTotalAmount(); // Recalculate total amount after removal
-    }
-
     function loadPurchaseOrderItems() {
         // Clear existing line items
         document.getElementById('lineItemsBody').innerHTML = '';
@@ -123,15 +91,13 @@
                     // Populate the table with line items
                     let totalAmount = 0;
                     lineItems.forEach(item => {
-                        let row = document.createElement('tr');
-                        row.innerHTML = `
+                        let row = `<tr>
                             <td><input type="text" class="form-control" name="item_name[]" value="${item.item_name}" required></td>
                             <td><input type="number" class="form-control" name="quantity[]" value="${item.quantity}" onchange="calculateTotalAmount()" required></td>
                             <td><input type="number" step="0.01" class="form-control" name="unit_price[]" value="${item.unit_price}" onchange="calculateTotalAmount()" required></td>
-                            <td class="line-item-total">${(item.quantity * item.unit_price).toFixed(2)}</td>
-                            <td><button type="button" class="btn btn-danger" onclick="removeLineItem(this)">Remove</button></td>
-                        `;
-                        lineItemsBody.appendChild(row);
+                            <td class="line-item-total">${item.quantity * item.unit_price}</td>
+                        </tr>`;
+                        lineItemsBody.innerHTML += row;
                         totalAmount += item.quantity * item.unit_price;
                     });
 
@@ -146,6 +112,7 @@
         const lineItemsBody = document.getElementById('lineItemsBody');
         const rows = lineItemsBody.getElementsByTagName('tr');
 
+        // Loop through each row to calculate total amount
         for (let i = 0; i < rows.length; i++) {
             const quantity = parseFloat(rows[i].querySelector('input[name="quantity[]"]').value) || 0;
             const unitPrice = parseFloat(rows[i].querySelector('input[name="unit_price[]"]').value) || 0;
@@ -160,6 +127,11 @@
 
         // Update the total amount in the form
         document.getElementById('total_amount').value = totalAmount.toFixed(2);
+    }
+
+    // Call the function to calculate total amount on page load
+    window.onload = function () {
+        calculateTotalAmount();
     }
 </script>
 {% endblock %}

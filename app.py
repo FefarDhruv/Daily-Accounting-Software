@@ -95,17 +95,16 @@ class Bill(db.Model):
 
 
 
-# Define the BillLineItem model
 class BillLineItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     bill_id = db.Column(db.Integer, db.ForeignKey('bill.id'), nullable=False)
     item_name = db.Column(db.String(100), nullable=False)
     quantity = db.Column(db.Integer, nullable=False)
     unit_price = db.Column(db.Float, nullable=False)
-    total_price = db.Column(db.Float, nullable=False)
 
-    # Define the relationship back to the Bill model with a unique backref name
-    bill = db.relationship('Bill', backref=db.backref('line_items', cascade='all, delete-orphan'))
+    # Relationship to link to the Bill
+    bill = db.relationship('Bill', backref=db.backref('bill_line_items', lazy=True))
+
 
 
     # Use a unique relationship name without using 'bill' to avoid conflict
@@ -391,120 +390,95 @@ def bill():
 
 # Route definition
 # Create New Bill (Bill Form)
+# Flask route for creating a bill
 @app.route('/create_bill', methods=['GET', 'POST'])
 @login_required
 def create_bill():
     if request.method == 'POST':
-        # Basic Bill Details
         bill_number = request.form['bill_number']
         purchase_order_id = request.form['purchase_order_id']
         bill_date = datetime.strptime(request.form['bill_date'], '%Y-%m-%d')
+        total_amount = request.form['total_amount']
         status = request.form['status']
 
-        # Calculate Total Amount based on line items
-        total_amount = 0
-
-        # Create a New Bill Object
+        # Create the Bill
         new_bill = Bill(
             bill_number=bill_number,
             purchase_order_id=purchase_order_id,
             bill_date=bill_date,
-            total_amount=0,  # Will update later after adding line items
+            total_amount=total_amount,
             status=status
         )
         db.session.add(new_bill)
         db.session.commit()
 
-        # Handle Line Items
+        # Add line items to the Bill
         item_names = request.form.getlist('item_name[]')
         quantities = request.form.getlist('quantity[]')
         unit_prices = request.form.getlist('unit_price[]')
 
         for item_name, quantity, unit_price in zip(item_names, quantities, unit_prices):
-            # Calculate the total price for the line item
-            quantity = int(quantity)
-            unit_price = float(unit_price)
-            total_price = quantity * unit_price
-
-            # Create and add a new line item for the bill
             new_line_item = BillLineItem(
                 bill_id=new_bill.id,
                 item_name=item_name,
-                quantity=quantity,
-                unit_price=unit_price,
-                total_price=total_price
+                quantity=int(quantity),
+                unit_price=float(unit_price)
             )
             db.session.add(new_line_item)
 
-            # Update the total amount of the bill
-            total_amount += total_price
-
-        # Update the total amount of the bill and commit changes
-        new_bill.total_amount = total_amount
         db.session.commit()
-
         flash('Bill created successfully!', 'success')
         return redirect(url_for('bill_list'))
 
-    # Load purchase orders to show in dropdown
-    purchase_orders = PurchaseOrder.query.all()
-    return render_template('bill_form.html', purchase_orders=purchase_orders, show_logo=True, active_tab='bill_list')
+    # If GET request, load the create bill form
+    purchase_orders = PurchaseOrder.query.all()  # Fetch all purchase orders
+    return render_template('create_bill.html', purchase_orders=purchase_orders)
 
 
-# Edit Bill
+
 # Edit Bill
 @app.route('/edit_bill/<int:bill_id>', methods=['GET', 'POST'])
 @login_required
 def edit_bill(bill_id):
+    # Fetch the bill from the database using the provided bill ID
     bill = Bill.query.get_or_404(bill_id)
 
+    # Fetch the associated line items for this bill
+    line_items = BillLineItem.query.filter_by(bill_id=bill_id).all()
+
+    # If the request method is POST, update the bill details
     if request.method == 'POST':
-        # Update Bill Details
         bill.bill_number = request.form['bill_number']
         bill.purchase_order_id = request.form['purchase_order_id']
         bill.bill_date = datetime.strptime(request.form['bill_date'], '%Y-%m-%d')
+        bill.total_amount = float(request.form['total_amount'])
         bill.status = request.form['status']
 
-        # Calculate new total amount based on line items
-        total_amount = 0
+        # Delete existing line items for the bill to update them
+        BillLineItem.query.filter_by(bill_id=bill_id).delete()
 
-        # Delete existing line items
-        BillLineItem.query.filter_by(bill_id=bill.id).delete()
-
-        # Handle Line Items
+        # Add updated line items
         item_names = request.form.getlist('item_name[]')
         quantities = request.form.getlist('quantity[]')
         unit_prices = request.form.getlist('unit_price[]')
 
         for item_name, quantity, unit_price in zip(item_names, quantities, unit_prices):
-            # Calculate total price for the line item
-            quantity = int(quantity)
-            unit_price = float(unit_price)
-            total_price = quantity * unit_price
-
-            # Create a new line item
             new_line_item = BillLineItem(
                 bill_id=bill.id,
                 item_name=item_name,
-                quantity=quantity,
-                unit_price=unit_price,
-                total_price=total_price
+                quantity=int(quantity),
+                unit_price=float(unit_price)
             )
             db.session.add(new_line_item)
 
-            # Update the total amount of the bill
-            total_amount += total_price
-
-        # Update the total amount of the bill and commit changes
-        bill.total_amount = total_amount
+        # Commit the changes
         db.session.commit()
-
         flash('Bill updated successfully!', 'success')
         return redirect(url_for('bill_list'))
 
-    # Load purchase orders to show in dropdown and existing line items for the bill
-    purchase_orders = PurchaseOrder.query.all()
-    return render_template('bill_form.html', bill=bill, purchase_orders=purchase_orders, show_logo=True, active_tab='bill_list')
+    # Render the edit_bill.html template with the bill and its line items
+    return render_template('edit_bill.html', bill=bill, line_items=line_items, purchase_orders=PurchaseOrder.query.all())
+
 
 
 # Delete Bill
@@ -592,7 +566,38 @@ def edit_purchase_order(order_id):
         order.total_amount = float(request.form['total_amount'])
         order.status = request.form['status']
 
-        # Commit the changes to the database
+        # Update or add line items
+        item_ids = request.form.getlist('item_id[]')  # Existing line item IDs
+        item_names = request.form.getlist('item_name[]')
+        quantities = request.form.getlist('quantity[]')
+        unit_prices = request.form.getlist('unit_price[]')
+
+        # Create a set of existing item IDs for tracking deletions
+        existing_item_ids = set(int(item.id) for item in order.line_items)
+
+        # Loop through the form data to update or add line items
+        for i, item_id in enumerate(item_ids):
+            if item_id:  # Update existing line item
+                line_item = LineItem.query.get(int(item_id))
+                line_item.item_name = item_names[i]
+                line_item.quantity = int(quantities[i])
+                line_item.unit_price = float(unit_prices[i])
+                existing_item_ids.remove(int(item_id))  # Remove from existing set
+            else:  # Add new line item
+                new_line_item = LineItem(
+                    purchase_order_id=order.id,
+                    item_name=item_names[i],
+                    quantity=int(quantities[i]),
+                    unit_price=float(unit_prices[i])
+                )
+                db.session.add(new_line_item)
+
+        # Delete line items that were removed
+        for item_id in existing_item_ids:
+            line_item_to_delete = LineItem.query.get(item_id)
+            db.session.delete(line_item_to_delete)
+
+        # Commit changes to the database
         db.session.commit()
         flash('Purchase Order updated successfully!', 'success')
         return redirect(url_for('purchase_order_list'))
@@ -603,6 +608,7 @@ def edit_purchase_order(order_id):
 
     return render_template('edit_purchase_order.html', order=order, vendors=vendors, line_items=line_items,
                            show_logo=True, active_tab='purchase_order')
+
 
 @app.route('/update_status/<int:order_id>', methods=['POST'])
 @login_required
@@ -669,6 +675,22 @@ def vendor_master():
         return redirect(url_for('vendor_list'))
 
     return render_template('vendor_master.html', show_logo=True, active_tab='vendor_master')
+
+@app.route('/get_purchase_order_items/<int:purchase_order_id>', methods=['GET'])
+@login_required
+def get_purchase_order_items(purchase_order_id):
+    # Fetch line items for the specified purchase order
+    line_items = LineItem.query.filter_by(purchase_order_id=purchase_order_id).all()
+    line_item_data = [
+        {
+            'item_name': item.item_name,
+            'quantity': item.quantity,
+            'unit_price': item.unit_price,
+            'total': item.quantity * item.unit_price
+        }
+        for item in line_items
+    ]
+    return jsonify({'line_items': line_item_data})
 
 
 # Edit Vendor

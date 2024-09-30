@@ -6,8 +6,10 @@
 <div class="container mt-5">
     <h2>Edit Purchase Order</h2>
     <form method="POST" action="/edit_purchase_order/{{ order.id }}">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <!-- CSRF Token for form security -->
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
+        <!-- Vendor Select -->
         <div class="form-group">
             <label for="vendor_id">Select Vendor</label>
             <select class="form-control" id="vendor_id" name="vendor_id" required>
@@ -19,16 +21,44 @@
             </select>
         </div>
 
+        <!-- Order Date -->
         <div class="form-group">
             <label for="order_date">Order Date</label>
             <input type="date" class="form-control" id="order_date" name="order_date" value="{{ order.order_date }}" required>
         </div>
 
-        <div class="form-group">
-            <label for="total_amount">Total Amount</label>
-            <input type="number" class="form-control" id="total_amount" name="total_amount" value="{{ order.total_amount }}" step="0.01" required>
+        <!-- Line Items Section -->
+        <div id="line-items-section">
+            <h5>Line Items</h5>
+            {% for line_item in line_items %}
+            <div class="line-item row mb-2" data-item-id="{{ line_item.id }}">
+                <input type="hidden" name="item_id[]" value="{{ line_item.id }}">
+                <div class="form-group col-md-4">
+                    <input type="text" class="form-control" name="item_name[]" value="{{ line_item.item_name }}" placeholder="Item Name" required>
+                </div>
+                <div class="form-group col-md-3">
+                    <input type="number" class="form-control" name="quantity[]" value="{{ line_item.quantity }}" placeholder="Quantity" min="1" required oninput="calculateTotal()">
+                </div>
+                <div class="form-group col-md-3">
+                    <input type="number" class="form-control" name="unit_price[]" value="{{ line_item.unit_price }}" placeholder="Unit Price" step="0.01" required oninput="calculateTotal()">
+                </div>
+                <div class="form-group col-md-2">
+                    <button type="button" class="btn btn-danger remove-item">Remove</button>
+                </div>
+            </div>
+            {% endfor %}
         </div>
 
+        <!-- Button to Add More Items -->
+        <button type="button" class="btn btn-primary" id="add-item-btn">Add Item</button>
+
+        <!-- Total Amount -->
+        <div class="form-group mt-4">
+            <label for="total_amount">Total Amount</label>
+            <input type="number" class="form-control" id="total_amount" name="total_amount" value="{{ order.total_amount }}" step="0.01" required readonly>
+        </div>
+
+        <!-- Status -->
         <div class="form-group">
             <label for="status">Status</label>
             <select class="form-control" id="status" name="status" required>
@@ -38,29 +68,63 @@
             </select>
         </div>
 
-        <!-- Line Items Section -->
-        <h4>Line Items</h4>
-        <div class="form-group">
-            {% for line_item in line_items %}
-            <div class="form-row mb-2">
-                <input type="hidden" name="item_id[]" value="{{ line_item.id }}">
-                <div class="col">
-                    <label>Item Name</label>
-                    <input type="text" class="form-control" name="item_name[]" value="{{ line_item.item_name }}" required>
-                </div>
-                <div class="col">
-                    <label>Quantity</label>
-                    <input type="number" class="form-control" name="quantity[]" value="{{ line_item.quantity }}" required>
-                </div>
-                <div class="col">
-                    <label>Unit Price</label>
-                    <input type="number" class="form-control" name="unit_price[]" value="{{ line_item.unit_price }}" step="0.01" required>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-
         <button type="submit" class="btn btn-dark">Update Purchase Order</button>
     </form>
 </div>
+
+<!-- JavaScript to handle dynamic line items and total calculation -->
+<script>
+document.getElementById('add-item-btn').addEventListener('click', function() {
+    var lineItemsSection = document.getElementById('line-items-section');
+    var newItem = document.createElement('div');
+    newItem.className = 'line-item row mb-2';
+
+    newItem.innerHTML = `
+        <div class="form-group col-md-4">
+            <input type="text" class="form-control" name="item_name[]" placeholder="Item Name" required>
+        </div>
+        <div class="form-group col-md-3">
+            <input type="number" class="form-control" name="quantity[]" placeholder="Quantity" min="1" required oninput="calculateTotal()">
+        </div>
+        <div class="form-group col-md-3">
+            <input type="number" class="form-control" name="unit_price[]" placeholder="Unit Price" step="0.01" required oninput="calculateTotal()">
+        </div>
+        <div class="form-group col-md-2">
+            <button type="button" class="btn btn-danger remove-item">Remove</button>
+        </div>
+    `;
+
+    lineItemsSection.appendChild(newItem);
+
+    newItem.querySelector('.remove-item').addEventListener('click', function() {
+        newItem.remove();
+        calculateTotal();
+    });
+});
+
+// Function to calculate total amount
+function calculateTotal() {
+    var total = 0;
+    var lineItems = document.querySelectorAll('.line-item');
+    lineItems.forEach(function(item) {
+        var quantity = item.querySelector('input[name="quantity[]"]').value;
+        var unitPrice = item.querySelector('input[name="unit_price[]"]').value;
+        if (quantity && unitPrice) {
+            total += parseFloat(quantity) * parseFloat(unitPrice);
+        }
+    });
+    document.getElementById('total_amount').value = total.toFixed(2);
+}
+
+// Event listener for remove item button
+document.querySelectorAll('.remove-item').forEach(function(button) {
+    button.addEventListener('click', function() {
+        button.parentElement.parentElement.remove();
+        calculateTotal();
+    });
+});
+
+// Calculate total amount on page load for existing items
+calculateTotal();
+</script>
 {% endblock %}
