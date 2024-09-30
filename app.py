@@ -38,7 +38,7 @@ class SetupOrganization(db.Model):
     email_id = db.Column(db.String(100), nullable=False)
     phone_number = db.Column(db.String(15), nullable=False)
     address = db.Column(db.String(255), nullable=False)
-    contact_person = db.Column(db.String(100), nullable=False)
+    # contact_person = db.Column(db.String(100), nullable=False)
     org_type = db.Column(db.String(50), nullable=False)
 
 class User(db.Model):
@@ -172,15 +172,27 @@ def add_users():
         # Retrieve organization_id from session
         organization_id = session.get('organization_id')
 
-        # Check if organization_id is set in session
-        if not organization_id:
-            flash('Error: Organization ID not found in session. Please set up the organization first.', 'danger')
-            return redirect(url_for('setup_organization'))
+        # Check if there is at least one Admin in the form submission
+        has_admin = any(role == 'Admin' for role in roles)
+
+        # Check if the organization already has an Admin user
+        existing_admin = User.query.filter_by(organization_id=organization_id, role='Admin').first()
+
+        # If no Admin in the form and no existing Admin in the organization, prevent submission
+        if not has_admin and not existing_admin:
+            # Instead of just flashing, use a special key for showing a pop-up
+            flash("Minimum 1 Admin required.", 'admin_required')
+            return redirect(url_for('add_users'))
 
         for username, password, role in zip(usernames, passwords, roles):
-            hashed_password = generate_password_hash(password)
+            # Check if the username already exists
+            existing_user = User.query.filter_by(username=username).first()
+            if existing_user:
+                flash(f"Username '{username}' already exists. Please choose a different username.", 'danger')
+                return redirect(url_for('add_users'))
 
-            # Ensure organization_id is passed when creating a new user
+            # If username is unique, create a new user
+            hashed_password = generate_password_hash(password)
             new_user = User(username=username, password=hashed_password, role=role, organization_id=organization_id)
             db.session.add(new_user)
 
@@ -191,65 +203,72 @@ def add_users():
     return render_template('add_users.html', show_logo=True, show_navbar=False)
 
 
-# Organization Module Routes (for External Organizations)
-@app.route('/organization_list')
-@login_required
-def organization_list():
-    organizations = Organization.query.all()  # Fetch all organizations
-    return render_template('organization_list.html', organizations=organizations, show_logo=True, active_tab='organization')
 
-# Organization Master Form Route (Add or Edit Organization)
+@app.route('/delete_user/<int:user_id>', methods=['POST'])
+@login_required
+def delete_user(user_id):
+    user_to_delete = User.query.get_or_404(user_id)
+
+    # Check if the user to be deleted is the only Admin in the organization
+    existing_admins = User.query.filter_by(organization_id=user_to_delete.organization_id, role='Admin').all()
+
+    if len(existing_admins) == 1 and user_to_delete.role == 'Admin':
+        flash("You cannot delete the only Admin user in the organization.", "danger")
+        return redirect(url_for('user_list'))
+
+    db.session.delete(user_to_delete)
+    db.session.commit()
+    flash("User deleted successfully.", "success")
+    return redirect(url_for('user_list'))
+
+
 @app.route('/organization_master', methods=['GET', 'POST'])
 @login_required
 def organization_master():
-    organization_id = request.args.get('organization_id')
-    organization = None
-
-    # Check if organization_id is present (edit mode)
-    if organization_id:
-        organization = Organization.query.get(organization_id)
-
+    # Check if request is POST (form submission)
     if request.method == 'POST':
-        # Retrieve form data
         org_name = request.form['org_name']
-        org_type = request.form['org_type']
+        gst_number = request.form['gst_number']
         email_id = request.form['email_id']
         phone_number = request.form['phone_number']
         address = request.form['address']
+        # contact_person = request.form['contact_person']
+        org_type = request.form['org_type']
         business_type = request.form['business_type']
-        gst_number = request.form['gst_number'] if business_type == "GST Registered" else None
 
-        if organization:  # Edit Mode
-            # Update existing organization
-            organization.org_name = org_name
-            organization.org_type = org_type
-            organization.email_id = email_id
-            organization.phone_number = phone_number
-            organization.address = address
-            organization.business_type = business_type
-            organization.gst_number = gst_number
-            flash('Organization updated successfully!', 'success')
-        else:  # Add Mode
-            # Create a new organization
-            new_organization = Organization(
-                org_name=org_name,
-                org_type=org_type,
-                email_id=email_id,
-                phone_number=phone_number,
-                address=address,
-                business_type=business_type,
-                gst_number=gst_number
-            )
-            db.session.add(new_organization)
-            flash('New organization added successfully!', 'success')
+        # Create a new organization entry
+        new_organization = Organization(
+            org_name=org_name,
+            gst_number=gst_number,
+            email_id=email_id,
+            phone_number=phone_number,
+            address=address,
+            # contact_person=contact_person,
+            org_type=org_type,
+            business_type=business_type
+        )
+        db.session.add(new_organization)
+        db.session.commit()  # Commit the new organization to the database
 
-        # Commit changes to the database
-        db.session.commit()
+        # Redirect to organization list page after successful submission
+        flash('Organization added successfully!', 'success')
         return redirect(url_for('organization_list'))
 
-    # Pass the organization object (None for add, object for edit)
-    return render_template('organization_master.html', organization=organization, show_logo=True, active_tab='organization')
+    return render_template('organization_master.html', show_logo=True, active_tab='organization')
 
+
+@app.route('/organization_list')
+@login_required
+def organization_list():
+    # Fetch only organizations related to the logged-in user's organization
+    organization_id = session.get('organization_id')
+    organizations = Organization.query.filter_by(id=organization_id).all()  # Replace with appropriate filtering logic
+
+    # Print statement to ensure organizations are being fetched correctly
+    print("Organizations fetched:", organizations)
+
+    return render_template('organization_list.html', organizations=organizations, show_logo=True,
+                           active_tab='organization')
 
 
 # Edit Organization Route
@@ -370,38 +389,54 @@ def purchase_order():
 @app.route('/edit_purchase_order/<int:order_id>', methods=['GET', 'POST'])
 @login_required
 def edit_purchase_order(order_id):
+    # Retrieve the purchase order to be edited
     order = PurchaseOrder.query.get_or_404(order_id)
 
     if request.method == 'POST':
-        # Update the purchase order
+        # Update the purchase order with new data
         order.vendor_id = request.form['vendor_id']
-        order.order_date = request.form['order_date']
-        order.total_amount = request.form['total_amount']
+
+        # Convert the order date to a Python date object
+        order_date_str = request.form['order_date']
+        try:
+            order.order_date = datetime.strptime(order_date_str, '%Y-%m-%d').date()
+        except ValueError:
+            flash("Invalid date format. Please use 'YYYY-MM-DD'.", 'danger')
+            return redirect(url_for('edit_purchase_order', order_id=order_id))
+
+        order.total_amount = float(request.form['total_amount'])
         order.status = request.form['status']
-        db.session.commit()
 
-        # Update line items
-        item_ids = request.form.getlist('item_id[]')
-        item_names = request.form.getlist('item_name[]')
-        quantities = request.form.getlist('quantity[]')
-        unit_prices = request.form.getlist('unit_price[]')
-
-        for i, item_id in enumerate(item_ids):
-            line_item = LineItem.query.get(item_id)
-            line_item.item_name = item_names[i]
-            line_item.quantity = quantities[i]
-            line_item.unit_price = unit_prices[i]
-
+        # Commit the changes to the database
         db.session.commit()
         flash('Purchase Order updated successfully!', 'success')
         return redirect(url_for('purchase_order_list'))
 
+    # If the request method is GET, show the form to edit the order
     vendors = Vendor.query.all()
     line_items = LineItem.query.filter_by(purchase_order_id=order_id).all()
 
     return render_template('edit_purchase_order.html', order=order, vendors=vendors, line_items=line_items,
                            show_logo=True, active_tab='purchase_order')
 
+@app.route('/update_status/<int:order_id>', methods=['POST'])
+@login_required
+def update_status(order_id):
+    # Retrieve the status from the form submission
+    new_status = request.form.get('status')
+
+    # Find the purchase order by ID
+    order = PurchaseOrder.query.get_or_404(order_id)
+
+    # Check if the new status is valid and update it
+    if new_status in ['Pending', 'Completed', 'Cancelled']:
+        order.status = new_status
+        db.session.commit()
+        flash(f'Order {order_id} status updated to {new_status} successfully!', 'success')
+    else:
+        flash('Invalid status value.', 'danger')
+
+    return redirect(url_for('purchase_order_list'))
 
 # Delete Purchase Order
 @app.route('/delete_purchase_order/<int:order_id>', methods=['POST'])

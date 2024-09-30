@@ -31,14 +31,16 @@
                     <td>{{ order.order_date }}</td>
                     <td>{{ order.total_amount }}</td>
                     <td>
+                        <!-- Status Dropdown with Direct Submission -->
                         <form action="/update_status/{{ order.id }}" method="POST">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                            <select name="status" class="form-control" onchange="this.form.submit()">
-                                <option value="Pending" {% if order.status == 'Pending' %}selected{% endif %}>Pending</option>
-                                <option value="Completed" {% if order.status == 'Completed' %}selected{% endif %}>Completed</option>
-                                <option value="Cancelled" {% if order.status == 'Cancelled' %}selected{% endif %}>Cancelled</option>
-                            </select>
-                        </form>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <select name="status" class="form-control" onchange="this.form.submit()">
+        <option value="Pending" {% if order.status == 'Pending' %}selected{% endif %}>Pending</option>
+        <option value="Completed" {% if order.status == 'Completed' %}selected{% endif %}>Completed</option>
+        <option value="Cancelled" {% if order.status == 'Cancelled' %}selected{% endif %}>Cancelled</option>
+    </select>
+</form>
+
                     </td>
                     <td>
                         <a href="/edit_purchase_order/{{ order.id }}" class="btn btn-warning btn-sm">Edit</a>
@@ -129,12 +131,14 @@ function updateOrderStatus(orderId, newStatus) {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'X-CSRFToken': '{{ csrf_token() }}'  // Ensure you have CSRF protection
+            'X-CSRFToken': '{{ csrf_token() }}'  // Ensure CSRF token is included
         },
         body: JSON.stringify({ status: newStatus })
     }).then(response => {
         if (response.ok) {
             console.log(`Order ${orderId} updated to ${newStatus}`);
+            // Optional: Reload to reflect status change
+            location.reload();
         } else {
             console.error('Failed to update order status');
         }
