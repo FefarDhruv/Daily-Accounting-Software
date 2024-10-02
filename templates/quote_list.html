@@ -26,8 +26,7 @@
                 <td>{{ quote.total_amount }}</td>
                 <td>{{ quote.status }}</td>
                 <td>
-                    <!-- Check if a sales order is linked to this quote -->
-                    {% if not quotes_with_sales_order[quote.id] %}
+                    {% if quote.status != 'Converted to Sales Order' %}
                         <a href="{{ url_for('edit_quote', quote_id=quote.id) }}" class="btn btn-warning btn-sm">Edit</a>
                         <form action="{{ url_for('delete_quote', quote_id=quote.id) }}" method="POST" style="display:inline-block;">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
@@ -40,7 +39,7 @@
                     {% endif %}
                 </td>
                 <td>
-                    <a href="/generate_quote_pdf/{{ quote.id }}" class="btn btn-info btn-sm">Download PDF</a>
+                    <a href="{{ url_for('generate_quote_pdf', quote_id=quote.id) }}" class="btn btn-info btn-sm">Download PDF</a>
                 </td>
             </tr>
             {% endfor %}

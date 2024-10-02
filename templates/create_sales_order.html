@@ -86,22 +86,22 @@ function populateQuoteDetails() {
                 var lineItemsSection = document.getElementById('line-items-section');
                 lineItemsSection.innerHTML = '';  // Clear existing line items
 
-                // Populate the line items
+                // Populate the line items using the quote data
                 data.line_items.forEach(item => {
                     var newItem = document.createElement('div');
                     newItem.classList.add('line-item', 'row', 'mb-3');
 
+                    // Create the product dropdown dynamically
+                    var productDropdown = `<div class="form-group col-md-4">
+                        <label for="product_id">Product</label>
+                        <select class="form-control" name="product_id[]" required>`;
+                    {% for product in products %}
+                    productDropdown += `<option value="{{ product.id }}" ${item.product_id == {{ product.id }} ? 'selected' : ''}>{{ product.product_name }}</option>`;
+                    {% endfor %}
+                    productDropdown += `</select></div>`;
+
                     newItem.innerHTML = `
-                        <div class="form-group col-md-4">
-                            <label for="product_id">Product</label>
-                            <select class="form-control" name="product_id[]" required>
-                                {% for product in products %}
-                                <option value="{{ product.id }}" ${item.product_id == {{ product.id }} ? 'selected' : ''}>
-                                    {{ product.product_name }}
-                                </option>
-                                {% endfor %}
-                            </select>
-                        </div>
+                        ${productDropdown}
                         <div class="form-group col-md-3">
                             <label for="quantity">Quantity</label>
                             <input type="number" class="form-control" name="quantity[]" placeholder="Quantity" min="1" value="${item.quantity}" required oninput="calculateTotal()">
@@ -110,15 +110,22 @@ function populateQuoteDetails() {
                             <label for="unit_price">Unit Price</label>
                             <input type="number" class="form-control" name="unit_price[]" placeholder="Unit Price" step="0.01" value="${item.unit_price}" required oninput="calculateTotal()">
                         </div>
-                        <div class="form-group col-md-3">
+                        <div class="form-group col-md-2">
                             <button type="button" class="btn btn-danger remove-item">Remove</button>
                         </div>
                     `;
                     lineItemsSection.appendChild(newItem);
+
+                    // Add event listener to the remove button
+                    newItem.querySelector('.remove-item').addEventListener('click', function() {
+                        newItem.remove();
+                        calculateTotal();
+                    });
                 });
 
                 calculateTotal();  // Recalculate the total
-            });
+            })
+            .catch(error => console.error('Error fetching quote details:', error));
     }
 }
 
@@ -136,7 +143,7 @@ function calculateTotal() {
     document.getElementById('total_amount').value = total.toFixed(2);
 }
 
-// Event listener for remove item button
+// Add event listeners to remove buttons for initial line items
 document.querySelectorAll('.remove-item').forEach(function(button) {
     button.addEventListener('click', function() {
         button.parentElement.parentElement.remove();

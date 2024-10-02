@@ -35,27 +35,37 @@
         <!-- Line Items Section -->
         <div id="line-items-section">
             <h5>Line Items</h5>
+            {% if not line_items %}
+            <p>No line items available for this sales order.</p>
+            {% endif %}
             {% for line_item in line_items %}
             <div class="line-item row mb-3">
-                <!-- Replace item_name field with a product dropdown -->
-<div class="form-group col-md-4">
-    <label for="product_id">Product</label>
-    <select class="form-control" name="product_id[]" required>
-        <option value="">-- Select Product --</option>
-        {% for product in products %}
-        <option value="{{ product.id }}" {% if line_item and line_item.product_id == product.id %}selected{% endif %}>
-            {{ product.product_name }}
-        </option>
-        {% endfor %}
-    </select>
-</div>
+                <!-- Product Dropdown -->
+                <div class="form-group col-md-4">
+                    <label for="product_id_{{ loop.index }}">Product</label>
+                    <select class="form-control" name="product_id[]" id="product_id_{{ loop.index }}" required>
+                        <option value="">-- Select Product --</option>
+                        {% for product in products %}
+                        <option value="{{ product.id }}" {% if line_item.product_id == product.id %}selected{% endif %}>
+                            {{ product.product_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
 
+                <!-- Quantity -->
                 <div class="form-group col-md-3">
-                    <input type="number" class="form-control" name="quantity[]" placeholder="Quantity" min="1" value="{{ line_item.quantity }}" required oninput="calculateTotal()">
+                    <label for="quantity_{{ loop.index }}">Quantity</label>
+                    <input type="number" class="form-control" name="quantity[]" id="quantity_{{ loop.index }}" placeholder="Quantity" min="1" value="{{ line_item.quantity }}" required oninput="calculateTotal()">
                 </div>
+
+                <!-- Unit Price -->
                 <div class="form-group col-md-3">
-                    <input type="number" class="form-control" name="unit_price[]" placeholder="Unit Price" step="0.01" value="{{ line_item.unit_price }}" required oninput="calculateTotal()">
+                    <label for="unit_price_{{ loop.index }}">Unit Price</label>
+                    <input type="number" class="form-control" name="unit_price[]" id="unit_price_{{ loop.index }}" placeholder="Unit Price" step="0.01" value="{{ line_item.unit_price }}" required oninput="calculateTotal()">
                 </div>
+
+                <!-- Remove Button -->
                 <div class="form-group col-md-2">
                     <button type="button" class="btn btn-danger remove-item">Remove</button>
                 </div>
@@ -92,9 +102,17 @@
 document.getElementById('add-item-btn').addEventListener('click', function() {
     var lineItemsSection = document.getElementById('line-items-section');
     var newItem = document.querySelector('.line-item').cloneNode(true);
+
+    // Clear all input values in the cloned node
     newItem.querySelectorAll('input').forEach(function(input) {
         input.value = '';
     });
+
+    // Reset the product dropdown selection
+    newItem.querySelectorAll('select').forEach(function(select) {
+        select.selectedIndex = 0;
+    });
+
     lineItemsSection.appendChild(newItem);
 
     newItem.querySelector('.remove-item').addEventListener('click', function() {

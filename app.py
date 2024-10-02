@@ -198,6 +198,10 @@ class BillLineItem(db.Model):
     # Use a unique relationship name without using 'bill' to avoid conflict
     # No need to define a backref here, as the Bill model already has one
 
+
+# app.py or models.py
+
+# SalesOrder Model
 class SalesOrder(db.Model):
     __tablename__ = 'sales_order'
     id = db.Column(db.Integer, primary_key=True)
@@ -211,7 +215,8 @@ class SalesOrder(db.Model):
     organization_id = db.Column(db.Integer, db.ForeignKey('setup_organization.id'), nullable=False)
 
     # New field to link SalesOrder to Quote
-    quote_id = db.Column(db.Integer, db.ForeignKey('quote.id'), nullable=True)  # Nullable if not all Sales Orders are created from Quotes
+    quote_id = db.Column(db.Integer, db.ForeignKey('quote.id'),
+                         nullable=True)  # Nullable if not all Sales Orders are created from Quotes
 
     # Relationship with Customer, Organization, and Quote
     customer = db.relationship('Customer', backref=db.backref('sales_orders', lazy=True))
@@ -219,10 +224,10 @@ class SalesOrder(db.Model):
     quote = db.relationship('Quote', backref=db.backref('sales_orders', lazy=True))  # Establish relationship with Quote
 
     # Use a unique backref name to avoid conflict with the SalesOrderLineItem relationship
-    line_items = db.relationship('SalesOrderLineItem', backref='order', lazy=True, cascade="all, delete-orphan")
+    line_items = db.relationship('SalesOrderLineItem', backref='order_ref', lazy=True, cascade="all, delete-orphan")
 
 
-
+# SalesOrderLineItem Model
 class SalesOrderLineItem(db.Model):
     __tablename__ = 'sales_order_line_item'
     id = db.Column(db.Integer, primary_key=True)
@@ -234,6 +239,8 @@ class SalesOrderLineItem(db.Model):
     # Relationship to Product using a unique backref name
     product = db.relationship('Product', backref=db.backref('sales_order_line_items', lazy=True))
 
+    # Relationship to SalesOrder using a unique backref name
+    sales_order = db.relationship('SalesOrder', backref=db.backref('sales_order_line_items', lazy=True))
 
 
 # app.py (or models.py)
@@ -1164,11 +1171,12 @@ def quote_list():
     # Create a dictionary to store if a sales order exists for each quote
     quotes_with_sales_order = {}
     for quote in quotes:
-        # Check if a SalesOrder is linked to this quote using quote_id
-        sales_order_exists = SalesOrder.query.filter_by(quote_id=quote.id).first() is not None
-        quotes_with_sales_order[quote.id] = sales_order_exists
+        # Disable actions for quotes that are converted to sales order
+        quotes_with_sales_order[quote.id] = quote.status == 'Converted to Sales Order'
 
     return render_template('quote_list.html', quotes=quotes, quotes_with_sales_order=quotes_with_sales_order, show_logo=True, active_tab='quote')
+
+
 
 
 
@@ -1329,56 +1337,63 @@ def sales_order_list():
 @app.route('/create_sales_order', methods=['GET', 'POST'])
 @login_required
 def create_sales_order():
-    # Fetch approved quotes only from the same organization
     organization_id = session.get('organization_id')
     approved_quotes = Quote.query.filter_by(status='Approved', organization_id=organization_id).all()
     customers = Customer.query.filter_by(organization_id=organization_id).all()
-    products = Product.query.all()  # Fetch all products to populate the product dropdowns in line items
+    products = Product.query.filter_by(organization_id=organization_id).all()
 
     if request.method == 'POST':
-        # Retrieve form data from the request
-        order_number = request.form['order_number']
-        customer_id = request.form['customer_id']
-        order_date = datetime.strptime(request.form['order_date'], '%Y-%m-%d')
-        total_amount = float(request.form['total_amount'])
-        status = request.form['status']
-        quote_id = request.form['quote_id']  # Capture the quote ID used for creating this sales order
+        try:
+            order_number = request.form['order_number']
+            customer_id = request.form['customer_id']
+            order_date = datetime.strptime(request.form['order_date'], '%Y-%m-%d')
+            total_amount = float(request.form['total_amount'])
+            status = request.form['status']
+            quote_id = request.form['quote_id']  # Capture the quote ID used for creating this sales order
 
-        # Get the organization ID from session
-        organization_id = session.get('organization_id')
-
-        # Create a new SalesOrder object
-        new_sales_order = SalesOrder(
-            order_number=order_number,
-            customer_id=customer_id,
-            order_date=order_date,
-            total_amount=total_amount,
-            status=status,
-            organization_id=organization_id  # Assign the organization ID
-        )
-        db.session.add(new_sales_order)
-        db.session.commit()
-
-        # Add line items to the sales order
-        product_ids = request.form.getlist('product_id[]')
-        quantities = request.form.getlist('quantity[]')
-        unit_prices = request.form.getlist('unit_price[]')
-
-        for product_id, quantity, unit_price in zip(product_ids, quantities, unit_prices):
-            new_line_item = SalesOrderLineItem(
-                sales_order_id=new_sales_order.id,
-                product_id=int(product_id),
-                quantity=int(quantity),
-                unit_price=float(unit_price)
+            # Create a new SalesOrder object
+            new_sales_order = SalesOrder(
+                order_number=order_number,
+                customer_id=customer_id,
+                order_date=order_date,
+                total_amount=total_amount,
+                status=status,
+                organization_id=organization_id,
+                quote_id=quote_id  # Link the quote ID to the sales order
             )
-            db.session.add(new_line_item)
+            db.session.add(new_sales_order)
+            db.session.commit()  # Commit the sales order first to get its ID
 
-        db.session.commit()
-        flash('Sales order created successfully!', 'success')
-        return redirect(url_for('sales_order_list'))
+            # Add line items to the SalesOrder
+            product_ids = request.form.getlist('product_id[]')
+            quantities = request.form.getlist('quantity[]')
+            unit_prices = request.form.getlist('unit_price[]')
 
-    # Render the create_sales_order form with approved quotes, customers, and products
+            for product_id, quantity, unit_price in zip(product_ids, quantities, unit_prices):
+                new_line_item = SalesOrderLineItem(
+                    sales_order_id=new_sales_order.id,  # Use the newly created sales order's ID
+                    product_id=int(product_id),
+                    quantity=int(quantity),
+                    unit_price=float(unit_price)
+                )
+                db.session.add(new_line_item)
+
+            # Update the quote status to 'Converted to Sales Order'
+            quote = Quote.query.get(quote_id)
+            if quote:
+                quote.status = 'Converted to Sales Order'
+                db.session.add(quote)  # Add the updated quote to the session
+
+            db.session.commit()  # Commit both the new sales order line items and quote status update
+            flash('Sales order created successfully and quote status updated!', 'success')
+            return redirect(url_for('sales_order_list'))
+        except Exception as e:
+            db.session.rollback()
+            app.logger.error(f"Failed to create sales order: {e}")
+            flash('Failed to create sales order. Please try again.', 'danger')
+
     return render_template('create_sales_order.html', approved_quotes=approved_quotes, customers=customers, products=products, show_logo=True, active_tab='sales_order')
+
 
 # Route to get quote details for populating sales order fields
 @app.route('/get_quote_details/<int:quote_id>', methods=['GET'])
@@ -1423,6 +1438,9 @@ def edit_sales_order(sales_order_id):
     # Fetch the associated line items for this sales order
     line_items = SalesOrderLineItem.query.filter_by(sales_order_id=sales_order_id).all()
 
+    # Debug: Print the retrieved line items to confirm they are being fetched
+    print("Line Items Retrieved: ", line_items)
+
     # If the request method is POST, update the sales order details
     if request.method == 'POST':
         # Update the sales order details from form data
@@ -1459,9 +1477,15 @@ def edit_sales_order(sales_order_id):
     products = Product.query.filter_by(organization_id=organization_id).all()  # Get products for organization
 
     # Render the edit_sales_order template with the sales order and its line items
-    return render_template('edit_sales_order.html', sales_order=sales_order, line_items=line_items,
-                           customers=customers, products=products, show_logo=True, active_tab='sales_order')
-
+    return render_template(
+        'edit_sales_order.html',
+        sales_order=sales_order,
+        line_items=line_items,
+        customers=customers,
+        products=products,
+        show_logo=True,
+        active_tab='sales_order'
+    )
 
 # Delete Sales Order
 @app.route('/delete_sales_order/<int:order_id>', methods=['POST'])
