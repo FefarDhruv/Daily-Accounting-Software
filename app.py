@@ -1,6 +1,7 @@
 # Imports
 from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy.exc import IntegrityError  # Import IntegrityError
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_wtf.csrf import CSRFProtect
 from flask_migrate import Migrate  # Include Flask-Migrate for migrations
@@ -29,6 +30,50 @@ class Organization(db.Model):
     address = db.Column(db.String(255), nullable=False)
     gst_number = db.Column(db.String(15), nullable=True)  # GST Number is optional
     business_type = db.Column(db.String(50), nullable=True)  # Add this line to define business_type
+
+class Product(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    product_name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.String(255), nullable=True)
+    product_code = db.Column(db.String(50), nullable=False, unique=True)
+    sku = db.Column(db.String(50), nullable=True)  # Include SKU
+    unit = db.Column(db.String(20), nullable=False)
+    category = db.Column(db.String(50), nullable=False)  # e.g., Consumable, Trading, etc.
+    product_type = db.Column(db.String(50), nullable=False)  # e.g., Finished Product, Service, Raw Material
+    brand = db.Column(db.String(50), nullable=True)
+    unit_price = db.Column(db.Float, nullable=False)
+    cost_price = db.Column(db.Float, nullable=True)
+    quantity_in_stock = db.Column(db.Integer, nullable=False, default=0)
+    reorder_level = db.Column(db.Integer, nullable=True, default=10)
+    gst_rate = db.Column(db.Float, nullable=True)
+    hsn_code = db.Column(db.String(20), nullable=True)
+    supplier = db.Column(db.String(100), nullable=True)
+    status = db.Column(db.String(20), nullable=False, default='Active')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Add organization_id as a Foreign Key
+    organization_id = db.Column(db.Integer, db.ForeignKey('setup_organization.id'), nullable=False)
+
+    # Establish relationship with SetupOrganization
+    organization = db.relationship('SetupOrganization', backref=db.backref('products', lazy=True))
+
+# app.py or models.py
+
+class Customer(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    customer_name = db.Column(db.String(100), nullable=False)
+    company_name = db.Column(db.String(100), nullable=False)
+    email_id = db.Column(db.String(100), nullable=False)
+    phone_number = db.Column(db.String(15), nullable=False)
+    address = db.Column(db.String(255), nullable=False)
+    gst_number = db.Column(db.String(15), nullable=True)  # GST Number is optional
+    organization_id = db.Column(db.Integer, db.ForeignKey('organization.id'), nullable=False)
+
+    organization = db.relationship('Organization', backref=db.backref('customers', lazy=True))
+
+    def __repr__(self):
+        return f"<Customer {self.customer_name} - {self.company_name}>"
 
 
 class SetupOrganization(db.Model):
@@ -93,6 +138,38 @@ class Bill(db.Model):
 
     # The relationship with BillLineItem is established through the backref in BillLineItem
 
+
+# Add this code to your `models.py` or where your models are defined
+
+# models.py
+
+# Quote Model
+class Quote(db.Model):
+    __tablename__ = 'quote'
+    id = db.Column(db.Integer, primary_key=True)
+    quote_number = db.Column(db.String(50), nullable=False, unique=True)
+    customer_id = db.Column(db.Integer, db.ForeignKey('customer.id'), nullable=False)
+    quote_date = db.Column(db.Date, nullable=False)
+    total_amount = db.Column(db.Float, nullable=False)
+    status = db.Column(db.String(50), nullable=False, default='Draft')
+
+    # Relationship with Customer and Line Items
+    customer = db.relationship('Customer', backref=db.backref('quotes', lazy=True))
+
+    # Rename the backref to avoid conflict
+    line_items = db.relationship('QuoteLineItem', backref='quote_ref', lazy=True, cascade="all, delete-orphan")
+
+# QuoteLineItem Model
+class QuoteLineItem(db.Model):
+    __tablename__ = 'quote_line_item'
+    id = db.Column(db.Integer, primary_key=True)
+    quote_id = db.Column(db.Integer, db.ForeignKey('quote.id'), nullable=False)
+    item_name = db.Column(db.String(100), nullable=False)
+    quantity = db.Column(db.Integer, nullable=False)
+    unit_price = db.Column(db.Float, nullable=False)
+
+    # Relationship to Quote using the same unique backref name as above
+    quote = db.relationship('Quote', backref=db.backref('quote_line_items', lazy=True))
 
 
 class BillLineItem(db.Model):
@@ -287,6 +364,239 @@ def organization_master():
         return redirect(url_for('organization_list'))
 
     return render_template('organization_master.html', show_logo=True, active_tab='organization')
+
+# Product List Page
+@app.route('/product_list')
+@login_required
+def product_list():
+    # Retrieve the organization_id from the session
+    organization_id = session.get('organization_id')
+    if not organization_id:
+        flash('Organization not found. Please log in again.', 'danger')
+        return redirect(url_for('login'))
+
+    # Fetch only products related to the logged-in user's organization
+    products = Product.query.filter_by(organization_id=organization_id).all()
+    return render_template('product_list.html', products=products, show_logo=True, active_tab='product')
+
+# app.py
+
+# Customer List Page
+@app.route('/customer_list')
+@login_required
+def customer_list():
+    # Retrieve the organization ID from the session
+    organization_id = session.get('organization_id')
+
+    # Fetch only customers that belong to the user's organization
+    customers = Customer.query.filter_by(organization_id=organization_id).all()
+
+    return render_template('customer_list.html', customers=customers, show_logo=True, active_tab='customer')
+# Add New Customer Page and Form Submission
+@app.route('/customer_master', methods=['GET', 'POST'])
+@login_required
+def customer_master():
+    if request.method == 'POST':
+        # Retrieve form data
+        customer_name = request.form['customer_name']
+        company_name = request.form['company_name']
+        email_id = request.form['email_id']
+        phone_number = request.form['phone_number']
+        address = request.form['address']
+        gst_number = request.form['gst_number']
+
+        # Check if organization_id exists in session
+        organization_id = session.get('organization_id')
+        if not organization_id:
+            flash('Organization not found. Please log in again.', 'danger')
+            return redirect(url_for('login'))
+
+        # Create a new customer with the organization ID
+        new_customer = Customer(
+            customer_name=customer_name,
+            company_name=company_name,
+            email_id=email_id,
+            phone_number=phone_number,
+            address=address,
+            gst_number=gst_number,
+            organization_id=organization_id  # Link to the organization
+        )
+        db.session.add(new_customer)
+        db.session.commit()
+
+        flash('Customer added successfully!', 'success')
+        return redirect(url_for('customer_list'))
+
+    return render_template('customer_master.html', show_logo=True, active_tab='customer_master')
+
+
+# Edit Customer Route
+@app.route('/edit_customer/<int:customer_id>', methods=['GET', 'POST'])
+@login_required
+def edit_customer(customer_id):
+    # Retrieve the organization ID from the session
+    organization_id = session.get('organization_id')
+
+    # Ensure the customer belongs to the user's organization
+    customer = Customer.query.filter_by(id=customer_id, organization_id=organization_id).first_or_404()
+
+    if request.method == 'POST':
+        # Update customer details
+        customer.customer_name = request.form['customer_name']
+        customer.company_name = request.form['company_name']
+        customer.email_id = request.form['email_id']
+        customer.phone_number = request.form['phone_number']
+        customer.address = request.form['address']
+        customer.gst_number = request.form['gst_number']
+
+        # Save the changes to the database
+        db.session.commit()
+        flash('Customer updated successfully!', 'success')
+        return redirect(url_for('customer_list'))
+
+    return render_template('edit_customer.html', customer=customer, show_logo=True, active_tab='customer')
+
+
+# Delete Customer Route
+@app.route('/delete_customer/<int:customer_id>', methods=['POST'])
+@login_required
+def delete_customer(customer_id):
+    # Retrieve the organization ID from the session
+    organization_id = session.get('organization_id')
+
+    # Ensure the customer belongs to the user's organization
+    customer = Customer.query.filter_by(id=customer_id, organization_id=organization_id).first_or_404()
+
+    try:
+        # Delete the customer
+        db.session.delete(customer)
+        db.session.commit()
+        flash('Customer deleted successfully!', 'success')
+    except Exception as e:
+        db.session.rollback()  # Rollback in case of error
+        flash(f'An error occurred while deleting the customer: {str(e)}', 'danger')
+
+    return redirect(url_for('customer_list'))
+
+
+
+# Add New Product Page and Form Submission
+# Add New Product Page and Form Submission
+@app.route('/add_product', methods=['GET', 'POST'])
+@login_required
+def add_product():
+    if request.method == 'POST':
+        product_name = request.form.get('product_name')
+        description = request.form.get('description')
+        product_code = request.form.get('product_code')
+        sku = request.form.get('sku')
+        product_type = request.form.get('product_type')
+        category = request.form.get('category')
+        unit = request.form.get('unit')
+        unit_price = float(request.form.get('unit_price', 0))
+        cost_price = float(request.form.get('cost_price', 0))
+        quantity_in_stock = int(request.form.get('quantity_in_stock', 0))
+        reorder_level = int(request.form.get('reorder_level', 0))
+        gst_rate = float(request.form.get('gst_rate', 0))
+        hsn_code = request.form.get('hsn_code')
+        supplier = request.form.get('supplier')
+        status = request.form.get('status', 'Active')
+        brand = request.form.get('brand')
+
+        # Retrieve the organization_id from the session
+        organization_id = session.get('organization_id')
+        if not organization_id:
+            flash('Organization not found. Please log in again.', 'danger')
+            return redirect(url_for('login'))
+
+        # Create a new product object
+        new_product = Product(
+            product_name=product_name,
+            description=description,
+            product_code=product_code,
+            sku=sku,
+            product_type=product_type,
+            category=category,
+            unit=unit,
+            unit_price=unit_price,
+            cost_price=cost_price,
+            quantity_in_stock=quantity_in_stock,
+            reorder_level=reorder_level,
+            gst_rate=gst_rate,
+            hsn_code=hsn_code,
+            supplier=supplier,
+            status=status,
+            brand=brand,
+            organization_id=organization_id  # Link the product to the organization
+        )
+
+        try:
+            # Attempt to add the new product to the database
+            db.session.add(new_product)
+            db.session.commit()
+            flash('Product added successfully!', 'success')
+            return redirect(url_for('product_list'))
+        except IntegrityError:
+            db.session.rollback()  # Rollback the session to handle the error
+            flash('A product with the same product code already exists. Please use a different product code.', 'danger')
+            return redirect(url_for('add_product'))
+
+    return render_template('add_product.html', show_logo=True, active_tab='products')
+
+# Edit Product Page and Form Submission
+@app.route('/edit_product/<int:product_id>', methods=['GET', 'POST'])
+@login_required
+def edit_product(product_id):
+    # Fetch the product to be edited
+    product = Product.query.get_or_404(product_id)
+
+    if request.method == 'POST':
+        # Print the form data to debug missing keys
+        print(request.form)
+
+        # Update product details from the form submission
+        product.product_name = request.form['product_name']
+        product.description = request.form['description']
+        product.product_code = request.form['product_code']
+        product.unit = request.form['unit']
+        product.category = request.form['category']
+        product.product_type = request.form['product_type']
+        product.brand = request.form['brand']  # Ensure this field exists in the form
+        product.unit_price = float(request.form['unit_price'])
+        product.cost_price = float(request.form['cost_price']) if request.form['cost_price'] else None
+        product.quantity_in_stock = int(request.form['quantity_in_stock'])
+        product.reorder_level = int(request.form['reorder_level']) if request.form['reorder_level'] else None
+        product.gst_rate = float(request.form['gst_rate']) if request.form['gst_rate'] else None
+        product.hsn_code = request.form['hsn_code']
+        product.supplier = request.form['supplier']
+        product.status = request.form['status']
+
+        # Save the updated product to the database
+        db.session.commit()
+        flash('Product updated successfully!', 'success')
+        return redirect(url_for('product_list'))
+
+    return render_template('edit_product.html', product=product, show_logo=True, active_tab='product')
+
+
+
+# Delete Product Route
+@app.route('/delete_product/<int:product_id>', methods=['POST'])
+@login_required
+def delete_product(product_id):
+    # Fetch the product to be deleted
+    product = Product.query.get_or_404(product_id)
+
+    try:
+        # Delete the product
+        db.session.delete(product)
+        db.session.commit()
+        flash('Product deleted successfully!', 'success')
+    except Exception as e:
+        db.session.rollback()  # Rollback in case of error
+        flash(f'An error occurred while deleting the product: {str(e)}', 'danger')
+
+    return redirect(url_for('product_list'))
 
 
 @app.route('/organization_list')
@@ -732,6 +1042,125 @@ def delete_vendor(vendor_id):
 
     return redirect(url_for('vendor_list'))
 
+# Quote List Page
+# Example route for displaying quotes with organization filtering
+@app.route('/quote')
+@login_required
+def quote_list():
+    organization_id = session.get('organization_id')
+
+    # Query to get all quotes for the current organization
+    quotes = Quote.query.join(Customer).filter(
+        Customer.organization_id == organization_id
+    ).all()
+
+    return render_template('quote_list.html', quotes=quotes, show_logo=True, active_tab='quote')
+
+@app.route('/create_quote', methods=['GET', 'POST'])
+@login_required
+def create_quote():
+    if request.method == 'POST':
+        # Auto-generate a unique quote number
+        last_quote = Quote.query.order_by(Quote.id.desc()).first()
+        if last_quote:
+            new_quote_number = str(int(last_quote.quote_number) + 1)
+        else:
+            new_quote_number = "1"  # Start with '1' if there are no quotes in the system
+
+        customer_id = request.form['customer_id']
+        quote_date = datetime.strptime(request.form['quote_date'], '%Y-%m-%d')
+        total_amount = float(request.form['total_amount'])
+        status = request.form['status']
+
+        # Create a new Quote object with the auto-generated quote number
+        new_quote = Quote(
+            quote_number=new_quote_number,
+            customer_id=customer_id,
+            quote_date=quote_date,
+            total_amount=total_amount,
+            status=status
+        )
+        db.session.add(new_quote)
+        db.session.commit()
+
+        # Add line items to the Quote
+        item_names = request.form.getlist('item_name[]')
+        quantities = request.form.getlist('quantity[]')
+        unit_prices = request.form.getlist('unit_price[]')
+
+        for item_name, quantity, unit_price in zip(item_names, quantities, unit_prices):
+            new_line_item = QuoteLineItem(
+                quote_id=new_quote.id,
+                item_name=item_name,
+                quantity=int(quantity),
+                unit_price=float(unit_price)
+            )
+            db.session.add(new_line_item)
+
+        db.session.commit()
+        flash('Quote created successfully!', 'success')
+        return redirect(url_for('quote_list'))
+
+    # Fetch customers for dropdown list
+    customers = Customer.query.all()
+    return render_template('create_quote.html', customers=customers)
+
+# Example route to edit a quote with organization filtering
+@app.route('/edit_quote/<int:quote_id>', methods=['GET', 'POST'])
+@login_required
+def edit_quote(quote_id):
+    # Fetch the organization ID from the session
+    organization_id = session.get('organization_id')
+
+    # Query to get the quote only if it belongs to the user's organization
+    quote = Quote.query.join(Customer).filter(
+        Quote.id == quote_id,
+        Customer.organization_id == organization_id  # Ensure the quote belongs to the current organization
+    ).first_or_404()
+
+    # Fetch customers belonging to the user's organization
+    customers = Customer.query.filter_by(organization_id=organization_id).all()
+
+    if request.method == 'POST':
+        # Update quote details from the form submission
+        quote.customer_id = request.form['customer_id']
+        quote.quote_date = datetime.strptime(request.form['quote_date'], '%Y-%m-%d')
+        quote.total_amount = float(request.form['total_amount'])
+        quote.status = request.form['status']
+
+        # Remove existing line items
+        QuoteLineItem.query.filter_by(quote_id=quote_id).delete()
+
+        # Add new line items from the form data
+        item_names = request.form.getlist('item_name[]')
+        quantities = request.form.getlist('quantity[]')
+        unit_prices = request.form.getlist('unit_price[]')
+
+        for item_name, quantity, unit_price in zip(item_names, quantities, unit_prices):
+            new_line_item = QuoteLineItem(
+                quote_id=quote.id,
+                item_name=item_name,
+                quantity=int(quantity),
+                unit_price=float(unit_price)
+            )
+            db.session.add(new_line_item)
+
+        db.session.commit()
+        flash('Quote updated successfully!', 'success')
+        return redirect(url_for('quote_list'))
+
+    return render_template('edit_quote.html', quote=quote, customers=customers, show_logo=True, active_tab='quote')
+
+
+# Delete Quote
+@app.route('/delete_quote/<int:quote_id>', methods=['POST'])
+@login_required
+def delete_quote(quote_id):
+    quote = Quote.query.get_or_404(quote_id)
+    db.session.delete(quote)
+    db.session.commit()
+    flash('Quote deleted successfully!', 'success')
+    return redirect(url_for('quote_list'))
 
 if __name__ == '__main__':
     app.run(debug=True)

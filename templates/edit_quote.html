@@ -1,0 +1,119 @@
+<!-- templates/edit_quote.html -->
+{% extends "base.html" %}
+
+{% block title %}Edit Quote{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2>Edit Quote</h2>
+    <form method="POST" action="{{ url_for('edit_quote', quote_id=quote.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <!-- Quote Number (Read-only) -->
+        <div class="form-group">
+            <label for="quote_number">Quote Number</label>
+            <input type="text" class="form-control" id="quote_number" name="quote_number" value="{{ quote.quote_number }}" readonly>
+        </div>
+
+        <!-- Customer Select -->
+        <div class="form-group">
+            <label for="customer_id">Select Customer</label>
+            <select class="form-control" id="customer_id" name="customer_id" required>
+                {% for customer in customers %}
+                <option value="{{ customer.id }}" {% if quote.customer_id == customer.id %}selected{% endif %}>
+                    {{ customer.customer_name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- Quote Date -->
+        <div class="form-group">
+            <label for="quote_date">Quote Date</label>
+            <input type="date" class="form-control" id="quote_date" name="quote_date" value="{{ quote.quote_date }}" required>
+        </div>
+
+        <!-- Line Items Section -->
+        <div id="line-items-section">
+            <h5>Line Items</h5>
+            {% for line_item in quote.line_items %}
+            <div class="line-item row mb-3">
+                <div class="form-group col-md-4">
+                    <input type="text" class="form-control" name="item_name[]" placeholder="Item Name" value="{{ line_item.item_name }}" required>
+                </div>
+                <div class="form-group col-md-3">
+                    <input type="number" class="form-control" name="quantity[]" placeholder="Quantity" min="1" value="{{ line_item.quantity }}" required oninput="calculateTotal()">
+                </div>
+                <div class="form-group col-md-3">
+                    <input type="number" class="form-control" name="unit_price[]" placeholder="Unit Price" step="0.01" value="{{ line_item.unit_price }}" required oninput="calculateTotal()">
+                </div>
+                <div class="form-group col-md-2">
+                    <button type="button" class="btn btn-danger remove-item">Remove</button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Button to Add More Items -->
+        <button type="button" class="btn btn-primary" id="add-item-btn">Add Item</button>
+
+        <!-- Total Amount -->
+        <div class="form-group mt-4">
+            <label for="total_amount">Total Amount</label>
+            <input type="number" class="form-control" id="total_amount" name="total_amount" step="0.01" value="{{ quote.total_amount }}" required readonly>
+        </div>
+
+        <!-- Status -->
+        <div class="form-group">
+            <label for="status">Status</label>
+            <select class="form-control" id="status" name="status" required>
+                <option value="Draft" {% if quote.status == 'Draft' %}selected{% endif %}>Draft</option>
+                <option value="Approved" {% if quote.status == 'Approved' %}selected{% endif %}>Approved</option>
+                <option value="Rejected" {% if quote.status == 'Rejected' %}selected{% endif %}>Rejected</option>
+            </select>
+        </div>
+
+        <!-- Submit Button -->
+        <button type="submit" class="btn btn-dark">Update Quote</button>
+    </form>
+</div>
+
+<!-- JavaScript to handle dynamic line items and total calculation -->
+<script>
+document.getElementById('add-item-btn').addEventListener('click', function() {
+    var lineItemsSection = document.getElementById('line-items-section');
+    var newItem = document.querySelector('.line-item').cloneNode(true);
+    newItem.querySelectorAll('input').forEach(function(input) {
+        input.value = '';
+    });
+    lineItemsSection.appendChild(newItem);
+
+    newItem.querySelector('.remove-item').addEventListener('click', function() {
+        newItem.remove();
+        calculateTotal();
+    });
+});
+
+// Function to calculate total amount
+function calculateTotal() {
+    var total = 0;
+    var lineItems = document.querySelectorAll('.line-item');
+    lineItems.forEach(function(item) {
+        var quantity = item.querySelector('input[name="quantity[]"]').value;
+        var unitPrice = item.querySelector('input[name="unit_price[]"]').value;
+        if (quantity && unitPrice) {
+            total += parseFloat(quantity) * parseFloat(unitPrice);
+        }
+    });
+    document.getElementById('total_amount').value = total.toFixed(2);
+}
+
+// Event listener for remove item button
+document.querySelectorAll('.remove-item').forEach(function(button) {
+    button.addEventListener('click', function() {
+        button.parentElement.parentElement.remove();
+        calculateTotal();
+    });
+});
+</script>
+{% endblock %}

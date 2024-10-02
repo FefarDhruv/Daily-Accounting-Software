@@ -41,6 +41,10 @@
         <a class="nav-link {% if active_tab == 'vendor_master' %}active{% endif %}" href="/vendor_list">Vendors</a>
     </li>
     <li class="nav-item">
+    <a class="nav-link {% if active_tab == 'product' %}active{% endif %}" href="/product_list">Products</a>
+    </li>
+
+    <li class="nav-item">
                 <a class="nav-link" href="{{ url_for('organization_list') }}">Organization</a> <!-- Link to organization_list -->
     </li>
     <li class="nav-item">
@@ -51,7 +55,7 @@
         <a class="nav-link {% if active_tab == 'bill' %}active{% endif %}" href="/bill">Bill</a>
     </li>
     <li class="nav-item">
-        <a class="nav-link {% if active_tab == 'customer' %}active{% endif %}" href="/customer">Customer</a>
+        <a class="nav-link {% if active_tab == 'customer' %}active{% endif %}" href="/customer_list">Customer</a>
     </li>
     <li class="nav-item">
         <a class="nav-link {% if active_tab == 'quote' %}active{% endif %}" href="/quote">Quote</a>
