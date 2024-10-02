@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quote PDF</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+
+        .container {
+            width: 100%;
+            margin: 20px auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .header h1 {
+            margin: 0;
+        }
+
+        .customer-details, .quote-details {
+            width: 48%;
+            float: left;
+            margin-bottom: 20px;
+        }
+
+        .quote-details {
+            text-align: right;
+        }
+
+        .line-items {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .line-items th, .line-items td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+        }
+
+        .line-items th {
+            background-color: #f4f4f4;
+        }
+
+        .total {
+            font-weight: bold;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+        }
+
+        .clearfix::after {
+            content: "";
+            clear: both;
+            display: table;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Quote #{{ quote.quote_number }}</h1>
+            <p>Quote Date: {{ quote.quote_date.strftime('%Y-%m-%d') }}</p>
+        </div>
+
+        <div class="clearfix">
+            <!-- Customer Details -->
+            <div class="customer-details">
+                <h3>Customer Details</h3>
+                <p>
+                    <strong>{{ customer.customer_name }}</strong><br>
+                    {{ customer.company_name }}<br>
+                    {{ customer.address }}<br>
+                    Email: {{ customer.email_id }}<br>
+                    Phone: {{ customer.phone_number }}
+                </p>
+            </div>
+
+            <!-- Quote Details -->
+            <div class="quote-details">
+                <h3>Quote Details</h3>
+                <p>
+                    <strong>Status:</strong> {{ quote.status }}<br>
+                    <strong>Total Amount:</strong> {{ quote.total_amount }}<br>
+                </p>
+            </div>
+        </div>
+
+        <!-- Line Items -->
+        <h3>Line Items</h3>
+        <table class="line-items">
+            <thead>
+                <tr>
+                    <th>Product Name</th>
+                    <th>Quantity</th>
+                    <th>Unit Price</th>
+                    <th>Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in line_items %}
+                <tr>
+                    <td>{{ item.product.product_name }}</td>
+                    <td>{{ item.quantity }}</td>
+                    <td>{{ item.unit_price }}</td>
+                    <td>{{ item.quantity * item.unit_price }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <!-- Total Amount -->
+        <div class="footer">
+            <h3>Total Amount: {{ quote.total_amount }}</h3>
+        </div>
+    </div>
+</body>
+</html>

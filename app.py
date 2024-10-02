@@ -1,11 +1,15 @@
 # Imports
-from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify , send_file, make_response
+from xhtml2pdf import pisa
+import pdfkit
+from io import BytesIO
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.exc import IntegrityError  # Import IntegrityError
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_wtf.csrf import CSRFProtect
 from flask_migrate import Migrate  # Include Flask-Migrate for migrations
 from datetime import datetime
+from weasyprint import HTML
 
 app = Flask(__name__)
 app.secret_key = 'your_secret_key'
@@ -111,9 +115,13 @@ class Vendor(db.Model):
 class LineItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     purchase_order_id = db.Column(db.Integer, db.ForeignKey('purchase_order.id'), nullable=False)
-    item_name = db.Column(db.String(100), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
     quantity = db.Column(db.Integer, nullable=False)
     unit_price = db.Column(db.Float, nullable=False)
+
+    # Establish relationship with Product
+    product = db.relationship('Product', backref=db.backref('line_items', lazy=True))
+
 
 class PurchaseOrder(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -143,7 +151,6 @@ class Bill(db.Model):
 
 # models.py
 
-# Quote Model
 class Quote(db.Model):
     __tablename__ = 'quote'
     id = db.Column(db.Integer, primary_key=True)
@@ -153,24 +160,28 @@ class Quote(db.Model):
     total_amount = db.Column(db.Float, nullable=False)
     status = db.Column(db.String(50), nullable=False, default='Draft')
 
-    # Relationship with Customer and Line Items
-    customer = db.relationship('Customer', backref=db.backref('quotes', lazy=True))
+    # New field to link Quote to SetupOrganization
+    organization_id = db.Column(db.Integer, db.ForeignKey('setup_organization.id'), nullable=False)
 
-    # Rename the backref to avoid conflict
+    # Relationships with Customer and Organization
+    customer = db.relationship('Customer', backref=db.backref('quotes', lazy=True))
+    organization = db.relationship('SetupOrganization', backref=db.backref('quotes', lazy=True))
+
+    # Updated relationship to QuoteLineItem with a unique backref name
     line_items = db.relationship('QuoteLineItem', backref='quote_ref', lazy=True, cascade="all, delete-orphan")
 
-# QuoteLineItem Model
+
 class QuoteLineItem(db.Model):
     __tablename__ = 'quote_line_item'
     id = db.Column(db.Integer, primary_key=True)
     quote_id = db.Column(db.Integer, db.ForeignKey('quote.id'), nullable=False)
-    item_name = db.Column(db.String(100), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
     quantity = db.Column(db.Integer, nullable=False)
     unit_price = db.Column(db.Float, nullable=False)
 
-    # Relationship to Quote using the same unique backref name as above
+    # Updated relationship to Quote with a unique backref name
     quote = db.relationship('Quote', backref=db.backref('quote_line_items', lazy=True))
-
+    product = db.relationship('Product', backref=db.backref('quote_line_items', lazy=True))
 
 class BillLineItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -187,8 +198,91 @@ class BillLineItem(db.Model):
     # Use a unique relationship name without using 'bill' to avoid conflict
     # No need to define a backref here, as the Bill model already has one
 
+class SalesOrder(db.Model):
+    __tablename__ = 'sales_order'
+    id = db.Column(db.Integer, primary_key=True)
+    order_number = db.Column(db.String(50), nullable=False, unique=True)
+    customer_id = db.Column(db.Integer, db.ForeignKey('customer.id'), nullable=False)
+    order_date = db.Column(db.Date, nullable=False)
+    total_amount = db.Column(db.Float, nullable=False)
+    status = db.Column(db.String(50), nullable=False, default='Draft')
+
+    # New field to link SalesOrder to SetupOrganization
+    organization_id = db.Column(db.Integer, db.ForeignKey('setup_organization.id'), nullable=False)
+
+    # New field to link SalesOrder to Quote
+    quote_id = db.Column(db.Integer, db.ForeignKey('quote.id'), nullable=True)  # Nullable if not all Sales Orders are created from Quotes
+
+    # Relationship with Customer, Organization, and Quote
+    customer = db.relationship('Customer', backref=db.backref('sales_orders', lazy=True))
+    organization = db.relationship('SetupOrganization', backref=db.backref('sales_orders', lazy=True))
+    quote = db.relationship('Quote', backref=db.backref('sales_orders', lazy=True))  # Establish relationship with Quote
+
+    # Use a unique backref name to avoid conflict with the SalesOrderLineItem relationship
+    line_items = db.relationship('SalesOrderLineItem', backref='order', lazy=True, cascade="all, delete-orphan")
 
 
+
+class SalesOrderLineItem(db.Model):
+    __tablename__ = 'sales_order_line_item'
+    id = db.Column(db.Integer, primary_key=True)
+    sales_order_id = db.Column(db.Integer, db.ForeignKey('sales_order.id'), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)  # Add product_id as FK
+    quantity = db.Column(db.Integer, nullable=False)
+    unit_price = db.Column(db.Float, nullable=False)
+
+    # Relationship to Product using a unique backref name
+    product = db.relationship('Product', backref=db.backref('sales_order_line_items', lazy=True))
+
+
+
+# app.py (or models.py)
+
+class Invoice(db.Model):
+    __tablename__ = 'invoice'
+    id = db.Column(db.Integer, primary_key=True)
+    invoice_number = db.Column(db.String(50), nullable=False, unique=True)
+    customer_id = db.Column(db.Integer, db.ForeignKey('customer.id'), nullable=False)
+    invoice_date = db.Column(db.Date, nullable=False)
+    total_amount = db.Column(db.Float, nullable=False)
+    status = db.Column(db.String(50), nullable=False, default='Draft')
+
+    # Foreign key to link the invoice to an organization
+    organization_id = db.Column(db.Integer, db.ForeignKey('organization.id'), nullable=False)
+
+    # Relationship with Customer and Line Items
+    customer = db.relationship('Customer', backref=db.backref('invoices', lazy=True))
+    line_items = db.relationship('InvoiceLineItem', backref='invoice_ref', lazy=True, cascade="all, delete-orphan")
+
+class InvoiceLineItem(db.Model):
+    __tablename__ = 'invoice_line_item'
+    id = db.Column(db.Integer, primary_key=True)
+    invoice_id = db.Column(db.Integer, db.ForeignKey('invoice.id'), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)  # Add product_id as FK
+    quantity = db.Column(db.Integer, nullable=False)
+    unit_price = db.Column(db.Float, nullable=False)
+
+    # Relationship to Invoice
+    invoice = db.relationship('Invoice', backref=db.backref('invoice_line_items', lazy=True))
+    product = db.relationship('Product', backref=db.backref('invoice_line_items', lazy=True))
+
+# app.py or models.py
+
+class Shipment(db.Model):
+    __tablename__ = 'shipment'
+    id = db.Column(db.Integer, primary_key=True)
+    shipment_number = db.Column(db.String(50), nullable=False, unique=True)
+    invoice_id = db.Column(db.Integer, db.ForeignKey('invoice.id'), nullable=False)
+    shipment_date = db.Column(db.Date, nullable=False)
+    carrier = db.Column(db.String(100), nullable=True)
+    tracking_number = db.Column(db.String(100), nullable=True)
+    status = db.Column(db.String(50), nullable=False, default='Pending')  # Status of the shipment
+    stage = db.Column(db.String(50), nullable=False, default='Pending')  # Shipment stages
+    organization_id = db.Column(db.Integer, db.ForeignKey('organization.id'), nullable=False)
+
+    # Relationships
+    invoice = db.relationship('Invoice', backref=db.backref('shipments', lazy=True))
+    organization = db.relationship('Organization', backref=db.backref('shipments', lazy=True))
 
 
 # Login Page
@@ -698,9 +792,9 @@ def bill():
     return render_template('bill_list.html', bills=bills, show_logo=True, active_tab='bill_list')
 
 
-# Route definition
-# Create New Bill (Bill Form)
-# Flask route for creating a bill
+# app.py
+
+# Updated Create Bill Function to Update Purchase Order Status
 @app.route('/create_bill', methods=['GET', 'POST'])
 @login_required
 def create_bill():
@@ -722,6 +816,11 @@ def create_bill():
         db.session.add(new_bill)
         db.session.commit()
 
+        # Mark the selected Purchase Order as 'Billed'
+        purchase_order = PurchaseOrder.query.get(purchase_order_id)
+        purchase_order.status = 'Billed'
+        db.session.commit()
+
         # Add line items to the Bill
         item_names = request.form.getlist('item_name[]')
         quantities = request.form.getlist('quantity[]')
@@ -740,24 +839,26 @@ def create_bill():
         flash('Bill created successfully!', 'success')
         return redirect(url_for('bill_list'))
 
-    # If GET request, load the create bill form
-    purchase_orders = PurchaseOrder.query.all()  # Fetch all purchase orders
+    # Only show purchase orders that are not billed
+    purchase_orders = PurchaseOrder.query.filter(PurchaseOrder.status != 'Billed').all()
     return render_template('create_bill.html', purchase_orders=purchase_orders)
 
-
-
-# Edit Bill
+# Edit Bill Route
 @app.route('/edit_bill/<int:bill_id>', methods=['GET', 'POST'])
 @login_required
 def edit_bill(bill_id):
-    # Fetch the bill from the database using the provided bill ID
+    # Retrieve the bill from the database using the provided bill ID
     bill = Bill.query.get_or_404(bill_id)
 
     # Fetch the associated line items for this bill
     line_items = BillLineItem.query.filter_by(bill_id=bill_id).all()
 
-    # If the request method is POST, update the bill details
+    # Fetch the purchase orders associated with the organization
+    organization_id = session.get('organization_id')
+    purchase_orders = PurchaseOrder.query.join(Vendor).filter(Vendor.organization_id == organization_id).all()
+
     if request.method == 'POST':
+        # Update the bill details
         bill.bill_number = request.form['bill_number']
         bill.purchase_order_id = request.form['purchase_order_id']
         bill.bill_date = datetime.strptime(request.form['bill_date'], '%Y-%m-%d')
@@ -768,26 +869,27 @@ def edit_bill(bill_id):
         BillLineItem.query.filter_by(bill_id=bill_id).delete()
 
         # Add updated line items
-        item_names = request.form.getlist('item_name[]')
+        product_ids = request.form.getlist('product_id[]')
         quantities = request.form.getlist('quantity[]')
         unit_prices = request.form.getlist('unit_price[]')
 
-        for item_name, quantity, unit_price in zip(item_names, quantities, unit_prices):
+        for product_id, quantity, unit_price in zip(product_ids, quantities, unit_prices):
             new_line_item = BillLineItem(
                 bill_id=bill.id,
-                item_name=item_name,
+                item_name=Product.query.get(int(product_id)).product_name,  # Get the product name from Product table
                 quantity=int(quantity),
                 unit_price=float(unit_price)
             )
             db.session.add(new_line_item)
 
-        # Commit the changes
+        # Save the updated bill details
         db.session.commit()
         flash('Bill updated successfully!', 'success')
         return redirect(url_for('bill_list'))
 
     # Render the edit_bill.html template with the bill and its line items
-    return render_template('edit_bill.html', bill=bill, line_items=line_items, purchase_orders=PurchaseOrder.query.all())
+    products = Product.query.filter_by(organization_id=organization_id).all()
+    return render_template('edit_bill.html', bill=bill, line_items=line_items, purchase_orders=purchase_orders, products=products, show_logo=True, active_tab='bill')
 
 
 
@@ -814,6 +916,7 @@ def purchase_order_list():
     purchase_orders = PurchaseOrder.query.join(Vendor).filter(Vendor.organization_id == organization_id).all()
     return render_template('purchase_order_list.html', purchase_orders=purchase_orders, show_logo=True, active_tab='purchase_order')
 # Add New Purchase Order (Purchase Order Form)
+# Add New Purchase Order (Purchase Order Form)
 @app.route('/purchase_order', methods=['GET', 'POST'])
 @login_required
 def purchase_order():
@@ -823,6 +926,7 @@ def purchase_order():
         total_amount = request.form['total_amount']
         status = request.form['status']
 
+        # Create new purchase order
         new_order = PurchaseOrder(
             vendor_id=vendor_id,
             order_date=datetime.strptime(order_date, '%Y-%m-%d'),
@@ -832,17 +936,18 @@ def purchase_order():
         db.session.add(new_order)
         db.session.commit()
 
-        # Add line items
-        item_names = request.form.getlist('item_name[]')
+        # Add line items using product lookup
+        product_ids = request.form.getlist('product_id[]')
         quantities = request.form.getlist('quantity[]')
         unit_prices = request.form.getlist('unit_price[]')
 
-        for item_name, quantity, unit_price in zip(item_names, quantities, unit_prices):
+        for product_id, quantity, unit_price in zip(product_ids, quantities, unit_prices):
+            product = Product.query.get(product_id)
             new_line_item = LineItem(
                 purchase_order_id=new_order.id,
-                item_name=item_name,
-                quantity=quantity,
-                unit_price=unit_price
+                product_id=product_id,
+                quantity=int(quantity),
+                unit_price=float(unit_price)
             )
             db.session.add(new_line_item)
 
@@ -851,7 +956,9 @@ def purchase_order():
         return redirect(url_for('purchase_order_list'))
 
     vendors = Vendor.query.all()  # Get the list of vendors for the dropdown
-    return render_template('purchase_order.html', vendors=vendors, show_logo=True, active_tab='purchase_order')
+    products = Product.query.all()  # Fetch all products for the dropdown
+    return render_template('purchase_order.html', vendors=vendors, products=products, show_logo=True, active_tab='purchase_order')
+
 
 
 # Edit Purchase Order
@@ -878,7 +985,7 @@ def edit_purchase_order(order_id):
 
         # Update or add line items
         item_ids = request.form.getlist('item_id[]')  # Existing line item IDs
-        item_names = request.form.getlist('item_name[]')
+        product_ids = request.form.getlist('product_id[]')  # Product IDs selected from the dropdown
         quantities = request.form.getlist('quantity[]')
         unit_prices = request.form.getlist('unit_price[]')
 
@@ -889,14 +996,14 @@ def edit_purchase_order(order_id):
         for i, item_id in enumerate(item_ids):
             if item_id:  # Update existing line item
                 line_item = LineItem.query.get(int(item_id))
-                line_item.item_name = item_names[i]
+                line_item.product_id = int(product_ids[i])  # Update product_id
                 line_item.quantity = int(quantities[i])
                 line_item.unit_price = float(unit_prices[i])
                 existing_item_ids.remove(int(item_id))  # Remove from existing set
             else:  # Add new line item
                 new_line_item = LineItem(
                     purchase_order_id=order.id,
-                    item_name=item_names[i],
+                    product_id=int(product_ids[i]),  # Assign product_id
                     quantity=int(quantities[i]),
                     unit_price=float(unit_prices[i])
                 )
@@ -914,10 +1021,12 @@ def edit_purchase_order(order_id):
 
     # If the request method is GET, show the form to edit the order
     vendors = Vendor.query.all()
+    products = Product.query.filter_by(organization_id=session.get('organization_id')).all()  # Fetch products for the organization
     line_items = LineItem.query.filter_by(purchase_order_id=order_id).all()
 
-    return render_template('edit_purchase_order.html', order=order, vendors=vendors, line_items=line_items,
+    return render_template('edit_purchase_order.html', order=order, vendors=vendors, products=products, line_items=line_items,
                            show_logo=True, active_tab='purchase_order')
+
 
 
 @app.route('/update_status/<int:order_id>', methods=['POST'])
@@ -986,6 +1095,7 @@ def vendor_master():
 
     return render_template('vendor_master.html', show_logo=True, active_tab='vendor_master')
 
+# Route to get purchase order line items for dynamic fetching
 @app.route('/get_purchase_order_items/<int:purchase_order_id>', methods=['GET'])
 @login_required
 def get_purchase_order_items(purchase_order_id):
@@ -993,7 +1103,7 @@ def get_purchase_order_items(purchase_order_id):
     line_items = LineItem.query.filter_by(purchase_order_id=purchase_order_id).all()
     line_item_data = [
         {
-            'item_name': item.item_name,
+            'item_name': item.product.product_name,  # Get product name from relationship
             'quantity': item.quantity,
             'unit_price': item.unit_price,
             'total': item.quantity * item.unit_price
@@ -1001,7 +1111,6 @@ def get_purchase_order_items(purchase_order_id):
         for item in line_items
     ]
     return jsonify({'line_items': line_item_data})
-
 
 # Edit Vendor
 @app.route('/edit_vendor/<int:vendor_id>', methods=['GET', 'POST'])
@@ -1049,12 +1158,19 @@ def delete_vendor(vendor_id):
 def quote_list():
     organization_id = session.get('organization_id')
 
-    # Query to get all quotes for the current organization
-    quotes = Quote.query.join(Customer).filter(
-        Customer.organization_id == organization_id
-    ).all()
+    # Get all quotes belonging to the user's organization
+    quotes = Quote.query.filter(Quote.organization_id == organization_id).all()
 
-    return render_template('quote_list.html', quotes=quotes, show_logo=True, active_tab='quote')
+    # Create a dictionary to store if a sales order exists for each quote
+    quotes_with_sales_order = {}
+    for quote in quotes:
+        # Check if a SalesOrder is linked to this quote using quote_id
+        sales_order_exists = SalesOrder.query.filter_by(quote_id=quote.id).first() is not None
+        quotes_with_sales_order[quote.id] = sales_order_exists
+
+    return render_template('quote_list.html', quotes=quotes, quotes_with_sales_order=quotes_with_sales_order, show_logo=True, active_tab='quote')
+
+
 
 @app.route('/create_quote', methods=['GET', 'POST'])
 @login_required
@@ -1072,26 +1188,31 @@ def create_quote():
         total_amount = float(request.form['total_amount'])
         status = request.form['status']
 
-        # Create a new Quote object with the auto-generated quote number
+        # Get the organization ID from session (assuming you have organization-specific quotes)
+        organization_id = session.get('organization_id')
+
+        # Create a new Quote object with the auto-generated quote number and organization_id
         new_quote = Quote(
             quote_number=new_quote_number,
             customer_id=customer_id,
             quote_date=quote_date,
             total_amount=total_amount,
-            status=status
+            status=status,
+            organization_id=organization_id  # Assign the organization ID if applicable
         )
         db.session.add(new_quote)
         db.session.commit()
 
         # Add line items to the Quote
-        item_names = request.form.getlist('item_name[]')
+        product_ids = request.form.getlist('product_id[]')  # Get product IDs instead of names
         quantities = request.form.getlist('quantity[]')
         unit_prices = request.form.getlist('unit_price[]')
 
-        for item_name, quantity, unit_price in zip(item_names, quantities, unit_prices):
+        for product_id, quantity, unit_price in zip(product_ids, quantities, unit_prices):
+            # Create a new line item using product_id, quantity, and unit_price
             new_line_item = QuoteLineItem(
                 quote_id=new_quote.id,
-                item_name=item_name,
+                product_id=int(product_id),  # Use product_id to link with the product
                 quantity=int(quantity),
                 unit_price=float(unit_price)
             )
@@ -1101,9 +1222,12 @@ def create_quote():
         flash('Quote created successfully!', 'success')
         return redirect(url_for('quote_list'))
 
-    # Fetch customers for dropdown list
-    customers = Customer.query.all()
-    return render_template('create_quote.html', customers=customers)
+    # Fetch customers and products for dropdown lists
+    customers = Customer.query.filter_by(organization_id=session['organization_id']).all()
+    products = Product.query.filter_by(organization_id=session['organization_id']).all()  # Fetch products for the current organization
+    return render_template('create_quote.html', customers=customers, products=products, show_logo=True, active_tab='quote')
+
+
 
 # Example route to edit a quote with organization filtering
 @app.route('/edit_quote/<int:quote_id>', methods=['GET', 'POST'])
@@ -1121,6 +1245,9 @@ def edit_quote(quote_id):
     # Fetch customers belonging to the user's organization
     customers = Customer.query.filter_by(organization_id=organization_id).all()
 
+    # Fetch products to populate the dropdown for line items
+    products = Product.query.filter_by(organization_id=organization_id).all()
+
     if request.method == 'POST':
         # Update quote details from the form submission
         quote.customer_id = request.form['customer_id']
@@ -1132,24 +1259,27 @@ def edit_quote(quote_id):
         QuoteLineItem.query.filter_by(quote_id=quote_id).delete()
 
         # Add new line items from the form data
-        item_names = request.form.getlist('item_name[]')
+        product_ids = request.form.getlist('product_id[]')
         quantities = request.form.getlist('quantity[]')
         unit_prices = request.form.getlist('unit_price[]')
 
-        for item_name, quantity, unit_price in zip(item_names, quantities, unit_prices):
-            new_line_item = QuoteLineItem(
-                quote_id=quote.id,
-                item_name=item_name,
-                quantity=int(quantity),
-                unit_price=float(unit_price)
-            )
-            db.session.add(new_line_item)
+        for product_id, quantity, unit_price in zip(product_ids, quantities, unit_prices):
+            # Ensure product_id is valid and not empty
+            if product_id:
+                new_line_item = QuoteLineItem(
+                    quote_id=quote.id,
+                    product_id=int(product_id),
+                    quantity=int(quantity),
+                    unit_price=float(unit_price)
+                )
+                db.session.add(new_line_item)
 
         db.session.commit()
         flash('Quote updated successfully!', 'success')
         return redirect(url_for('quote_list'))
 
-    return render_template('edit_quote.html', quote=quote, customers=customers, show_logo=True, active_tab='quote')
+    return render_template('edit_quote.html', quote=quote, customers=customers, products=products, show_logo=True, active_tab='quote')
+
 
 
 # Delete Quote
@@ -1161,6 +1291,489 @@ def delete_quote(quote_id):
     db.session.commit()
     flash('Quote deleted successfully!', 'success')
     return redirect(url_for('quote_list'))
+
+# Sales Order List Page
+# Sales Order List Page with Organization Filtering
+@app.route('/sales_order', methods=['GET'])
+@login_required
+def sales_order_list():
+    organization_id = session.get('organization_id')
+
+    # Query to filter sales orders by organization
+    sales_orders = SalesOrder.query.join(Customer).filter(
+        Customer.organization_id == organization_id,
+        SalesOrder.organization_id == organization_id  # Ensure sales order belongs to the user's organization
+    ).all()
+
+    return render_template('sales_order_list.html', sales_orders=sales_orders, show_logo=True, active_tab='sales_order')
+
+
+# @app.route('/get_quote_details/<int:quote_id>', methods=['GET'])
+# @login_required
+# def get_quote_details(quote_id):
+#     # Retrieve the quote and associated line items
+#     quote = Quote.query.get_or_404(quote_id)
+#     customer = quote.customer
+#     line_items = quote.line_items
+#
+#     # Prepare data to return as JSON
+#     data = {
+#         'customer_name': customer.customer_name,
+#         'customer_id': customer.id,
+#         'line_items': [{'item_name': item.item_name, 'quantity': item.quantity, 'unit_price': item.unit_price} for item in line_items],
+#         'total_amount': quote.total_amount
+#     }
+#     return jsonify(data)
+
+# Route to create a sales order
+@app.route('/create_sales_order', methods=['GET', 'POST'])
+@login_required
+def create_sales_order():
+    # Fetch approved quotes only from the same organization
+    organization_id = session.get('organization_id')
+    approved_quotes = Quote.query.filter_by(status='Approved', organization_id=organization_id).all()
+    customers = Customer.query.filter_by(organization_id=organization_id).all()
+    products = Product.query.all()  # Fetch all products to populate the product dropdowns in line items
+
+    if request.method == 'POST':
+        # Retrieve form data from the request
+        order_number = request.form['order_number']
+        customer_id = request.form['customer_id']
+        order_date = datetime.strptime(request.form['order_date'], '%Y-%m-%d')
+        total_amount = float(request.form['total_amount'])
+        status = request.form['status']
+        quote_id = request.form['quote_id']  # Capture the quote ID used for creating this sales order
+
+        # Get the organization ID from session
+        organization_id = session.get('organization_id')
+
+        # Create a new SalesOrder object
+        new_sales_order = SalesOrder(
+            order_number=order_number,
+            customer_id=customer_id,
+            order_date=order_date,
+            total_amount=total_amount,
+            status=status,
+            organization_id=organization_id  # Assign the organization ID
+        )
+        db.session.add(new_sales_order)
+        db.session.commit()
+
+        # Add line items to the sales order
+        product_ids = request.form.getlist('product_id[]')
+        quantities = request.form.getlist('quantity[]')
+        unit_prices = request.form.getlist('unit_price[]')
+
+        for product_id, quantity, unit_price in zip(product_ids, quantities, unit_prices):
+            new_line_item = SalesOrderLineItem(
+                sales_order_id=new_sales_order.id,
+                product_id=int(product_id),
+                quantity=int(quantity),
+                unit_price=float(unit_price)
+            )
+            db.session.add(new_line_item)
+
+        db.session.commit()
+        flash('Sales order created successfully!', 'success')
+        return redirect(url_for('sales_order_list'))
+
+    # Render the create_sales_order form with approved quotes, customers, and products
+    return render_template('create_sales_order.html', approved_quotes=approved_quotes, customers=customers, products=products, show_logo=True, active_tab='sales_order')
+
+# Route to get quote details for populating sales order fields
+@app.route('/get_quote_details/<int:quote_id>', methods=['GET'])
+@login_required
+def get_quote_details(quote_id):
+    # Fetch the quote details based on the quote_id
+    organization_id = session.get('organization_id')
+    quote = Quote.query.filter_by(id=quote_id, organization_id=organization_id, status='Approved').first_or_404()
+
+    # Retrieve line items for the quote
+    line_items = [
+        {
+            'product_id': line_item.product_id,
+            'product_name': line_item.product.product_name,
+            'quantity': line_item.quantity,
+            'unit_price': line_item.unit_price
+        }
+        for line_item in quote.line_items
+    ]
+
+    # Prepare data to return as JSON
+    quote_details = {
+        'quote_number': quote.quote_number,
+        'customer_id': quote.customer_id,
+        'quote_date': quote.quote_date.strftime('%Y-%m-%d'),
+        'total_amount': quote.total_amount,
+        'line_items': line_items
+    }
+
+    return jsonify(quote_details)
+
+
+
+# Edit Sales Order Route
+@app.route('/edit_sales_order/<int:sales_order_id>', methods=['GET', 'POST'])
+@login_required
+def edit_sales_order(sales_order_id):
+    # Retrieve the sales order using the provided ID and ensure it belongs to the current organization
+    organization_id = session.get('organization_id')
+    sales_order = SalesOrder.query.filter_by(id=sales_order_id, organization_id=organization_id).first_or_404()
+
+    # Fetch the associated line items for this sales order
+    line_items = SalesOrderLineItem.query.filter_by(sales_order_id=sales_order_id).all()
+
+    # If the request method is POST, update the sales order details
+    if request.method == 'POST':
+        # Update the sales order details from form data
+        sales_order.order_number = request.form['order_number']
+        sales_order.customer_id = request.form['customer_id']
+        sales_order.order_date = datetime.strptime(request.form['order_date'], '%Y-%m-%d')
+        sales_order.total_amount = float(request.form['total_amount'])
+        sales_order.status = request.form['status']
+
+        # Remove existing line items to update them
+        SalesOrderLineItem.query.filter_by(sales_order_id=sales_order_id).delete()
+
+        # Add updated line items
+        product_ids = request.form.getlist('product_id[]')
+        quantities = request.form.getlist('quantity[]')
+        unit_prices = request.form.getlist('unit_price[]')
+
+        for product_id, quantity, unit_price in zip(product_ids, quantities, unit_prices):
+            new_line_item = SalesOrderLineItem(
+                sales_order_id=sales_order_id,
+                product_id=int(product_id),
+                quantity=int(quantity),
+                unit_price=float(unit_price)
+            )
+            db.session.add(new_line_item)
+
+        # Commit the updated sales order and its line items
+        db.session.commit()
+        flash('Sales Order updated successfully!', 'success')
+        return redirect(url_for('sales_order_list'))
+
+    # Fetch all customers and products for the dropdowns
+    customers = Customer.query.filter_by(organization_id=organization_id).all()
+    products = Product.query.filter_by(organization_id=organization_id).all()  # Get products for organization
+
+    # Render the edit_sales_order template with the sales order and its line items
+    return render_template('edit_sales_order.html', sales_order=sales_order, line_items=line_items,
+                           customers=customers, products=products, show_logo=True, active_tab='sales_order')
+
+
+# Delete Sales Order
+@app.route('/delete_sales_order/<int:order_id>', methods=['POST'])
+@login_required
+def delete_sales_order(order_id):
+    # Ensure the sales order belongs to the user's organization before deletion
+    organization_id = session.get('organization_id')
+    sales_order = SalesOrder.query.join(Customer).filter(
+        SalesOrder.id == order_id,
+        Customer.organization_id == organization_id,
+        SalesOrder.organization_id == organization_id
+    ).first_or_404()
+
+    db.session.delete(sales_order)
+    db.session.commit()
+    flash('Sales Order deleted successfully!', 'success')
+    return redirect(url_for('sales_order_list'))
+
+
+# app.py
+
+@app.route('/invoice', methods=['GET', 'POST'])
+@login_required
+def invoice_list():
+    # Retrieve organization ID from session
+    organization_id = session.get('organization_id')
+    invoices = Invoice.query.join(Customer).filter(
+        Customer.organization_id == organization_id,
+        Invoice.organization_id == organization_id
+    ).all()
+    return render_template('invoice_list.html', invoices=invoices, show_logo=True, active_tab='invoice')
+
+
+@app.route('/create_invoice', methods=['GET', 'POST'])
+@login_required
+def create_invoice():
+    if request.method == 'POST':
+        # Retrieve organization ID from session
+        organization_id = session.get('organization_id')
+
+        # Auto-generate a unique invoice number
+        last_invoice = Invoice.query.order_by(Invoice.id.desc()).first()
+        if last_invoice:
+            new_invoice_number = str(int(last_invoice.invoice_number) + 1)
+        else:
+            new_invoice_number = "1"  # Start with '1' if there are no invoices in the system
+
+        customer_id = request.form['customer_id']
+        invoice_date = datetime.strptime(request.form['invoice_date'], '%Y-%m-%d')
+        total_amount = float(request.form['total_amount'])
+        status = request.form['status']
+
+        # Create a new Invoice object
+        new_invoice = Invoice(
+            invoice_number=new_invoice_number,
+            customer_id=customer_id,
+            invoice_date=invoice_date,
+            total_amount=total_amount,
+            status=status,
+            organization_id=organization_id  # Link the invoice to the organization
+        )
+        db.session.add(new_invoice)
+        db.session.commit()
+
+        # Add line items to the Invoice
+        item_names = request.form.getlist('item_name[]')
+        quantities = request.form.getlist('quantity[]')
+        unit_prices = request.form.getlist('unit_price[]')
+
+        for item_name, quantity, unit_price in zip(item_names, quantities, unit_prices):
+            new_line_item = InvoiceLineItem(
+                invoice_id=new_invoice.id,
+                item_name=item_name,
+                quantity=int(quantity),
+                unit_price=float(unit_price)
+            )
+            db.session.add(new_line_item)
+
+        db.session.commit()
+        flash('Invoice created successfully!', 'success')
+        return redirect(url_for('invoice_list'))
+
+    # Fetch customers belonging to the user's organization for dropdown
+    organization_id = session.get('organization_id')
+    customers = Customer.query.filter_by(organization_id=organization_id).all()
+    return render_template('create_invoice.html', customers=customers)
+
+
+@app.route('/edit_invoice/<int:invoice_id>', methods=['GET', 'POST'])
+@login_required
+def edit_invoice(invoice_id):
+    # Retrieve organization ID from session
+    organization_id = session.get('organization_id')
+
+    # Query to get the invoice only if it belongs to the user's organization
+    invoice = Invoice.query.join(Customer).filter(
+        Invoice.id == invoice_id,
+        Customer.organization_id == organization_id,
+        Invoice.organization_id == organization_id
+    ).first_or_404()
+
+    # Fetch customers belonging to the user's organization
+    customers = Customer.query.filter_by(organization_id=organization_id).all()
+
+    if request.method == 'POST':
+        # Update invoice details from the form submission
+        invoice.customer_id = request.form['customer_id']
+        invoice.invoice_date = datetime.strptime(request.form['invoice_date'], '%Y-%m-%d')
+        invoice.total_amount = float(request.form['total_amount'])
+        invoice.status = request.form['status']
+
+        # Remove existing line items
+        InvoiceLineItem.query.filter_by(invoice_id=invoice_id).delete()
+
+        # Add new line items from the form data
+        item_names = request.form.getlist('item_name[]')
+        quantities = request.form.getlist('quantity[]')
+        unit_prices = request.form.getlist('unit_price[]')
+
+        for item_name, quantity, unit_price in zip(item_names, quantities, unit_prices):
+            new_line_item = InvoiceLineItem(
+                invoice_id=invoice.id,
+                item_name=item_name,
+                quantity=int(quantity),
+                unit_price=float(unit_price)
+            )
+            db.session.add(new_line_item)
+
+        db.session.commit()
+        flash('Invoice updated successfully!', 'success')
+        return redirect(url_for('invoice_list'))
+
+    return render_template('edit_invoice.html', invoice=invoice, customers=customers, show_logo=True,
+                           active_tab='invoice')
+
+
+@app.route('/delete_invoice/<int:invoice_id>', methods=['POST'])
+@login_required
+def delete_invoice(invoice_id):
+    invoice = Invoice.query.get_or_404(invoice_id)
+    db.session.delete(invoice)
+    db.session.commit()
+    flash('Invoice deleted successfully!', 'success')
+    return redirect(url_for('invoice_list'))
+
+@app.route('/shipment_list')
+@login_required
+def shipment_list():
+    organization_id = session.get('organization_id')
+    shipments = Shipment.query.join(Invoice).filter(
+        Invoice.organization_id == organization_id,
+        Shipment.organization_id == organization_id
+    ).all()
+    return render_template('shipment_list.html', shipments=shipments, show_logo=True, active_tab='shipment')
+
+
+@app.route('/create_shipment', methods=['GET', 'POST'])
+@login_required
+def create_shipment():
+    if request.method == 'POST':
+        shipment_number = request.form['shipment_number']
+        invoice_id = request.form['invoice_id']
+        shipment_date = datetime.strptime(request.form['shipment_date'], '%Y-%m-%d')
+        carrier = request.form['carrier']
+        tracking_number = request.form['tracking_number']
+        status = request.form['status']
+        stage = request.form['stage']
+        organization_id = session.get('organization_id')
+
+        new_shipment = Shipment(
+            shipment_number=shipment_number,
+            invoice_id=invoice_id,
+            shipment_date=shipment_date,
+            carrier=carrier,
+            tracking_number=tracking_number,
+            status=status,
+            stage=stage,
+            organization_id=organization_id
+        )
+        db.session.add(new_shipment)
+        db.session.commit()
+        flash('Shipment created successfully!', 'success')
+        return redirect(url_for('shipment_list'))
+
+    invoices = Invoice.query.filter_by(organization_id=session.get('organization_id')).all()
+    return render_template('create_shipment.html', invoices=invoices, show_logo=True, active_tab='shipment')
+
+
+@app.route('/edit_shipment/<int:shipment_id>', methods=['GET', 'POST'])
+@login_required
+def edit_shipment(shipment_id):
+    shipment = Shipment.query.get_or_404(shipment_id)
+    if request.method == 'POST':
+        shipment.shipment_number = request.form['shipment_number']
+        shipment.invoice_id = request.form['invoice_id']
+        shipment.shipment_date = datetime.strptime(request.form['shipment_date'], '%Y-%m-%d')
+        shipment.carrier = request.form['carrier']
+        shipment.tracking_number = request.form['tracking_number']
+        shipment.status = request.form['status']
+        shipment.stage = request.form['stage']
+
+        db.session.commit()
+        flash('Shipment updated successfully!', 'success')
+        return redirect(url_for('shipment_list'))
+
+    invoices = Invoice.query.filter_by(organization_id=session.get('organization_id')).all()
+    return render_template('edit_shipment.html', shipment=shipment, invoices=invoices, show_logo=True, active_tab='shipment')
+
+
+@app.route('/update_shipment_status/<int:shipment_id>', methods=['POST'])
+@login_required
+def update_shipment_status(shipment_id):
+    try:
+        # Retrieve the JSON data from the request
+        data = request.get_json()
+        new_status = data.get('status')
+
+        # Fetch the shipment using the provided ID
+        shipment = Shipment.query.get_or_404(shipment_id)
+
+        # Update the status of the shipment
+        shipment.status = new_status
+
+        # Commit the changes to the database
+        db.session.commit()
+
+        return jsonify({'message': f'Shipment {shipment_id} status updated to {new_status} successfully!'}), 200
+    except Exception as e:
+        print(f"Error updating shipment status: {str(e)}")
+        return jsonify({'error': 'Failed to update shipment status'}), 500
+
+
+@app.route('/delete_shipment/<int:shipment_id>', methods=['POST'])
+@login_required
+def delete_shipment(shipment_id):
+    shipment = Shipment.query.get_or_404(shipment_id)
+    db.session.delete(shipment)
+    db.session.commit()
+    flash('Shipment deleted successfully!', 'success')
+    return redirect(url_for('shipment_list'))
+
+
+@app.route('/generate_bill_pdf/<int:bill_id>', methods=['GET'])
+@login_required
+def generate_bill_pdf(bill_id):
+    # Fetch the bill using the provided bill ID
+    bill = Bill.query.get_or_404(bill_id)
+    purchase_order = PurchaseOrder.query.get(bill.purchase_order_id)
+    line_items = BillLineItem.query.filter_by(bill_id=bill.id).all()
+
+    # Render the template with the bill data
+    rendered = render_template('bill_pdf_template.html', bill=bill, purchase_order=purchase_order,
+                               line_items=line_items)
+
+    # Convert HTML to PDF
+    pdf = BytesIO()
+    pisa_status = pisa.CreatePDF(BytesIO(rendered.encode("UTF-8")), dest=pdf)
+
+    # Check if PDF was successfully created
+    if pisa_status.err:
+        flash('Error generating PDF', 'danger')
+        return redirect(url_for('bill_list'))
+
+    # Return the generated PDF as a response
+    pdf.seek(0)
+    return send_file(pdf, as_attachment=True, download_name=f"Bill_{bill.bill_number}.pdf", mimetype='application/pdf')
+
+
+
+@app.route('/generate_purchase_order_pdf/<int:order_id>', methods=['GET'])
+@login_required
+def generate_purchase_order_pdf(order_id):
+    # Fetch the Purchase Order details based on order_id
+    order = PurchaseOrder.query.get_or_404(order_id)
+    line_items = LineItem.query.filter_by(purchase_order_id=order_id).all()
+
+    # Render the template for the Purchase Order PDF
+    rendered = render_template('purchase_order_pdf.html', order=order, line_items=line_items)
+
+    # Create a PDF using WeasyPrint
+    pdf = HTML(string=rendered).write_pdf()
+
+    # Create a PDF response
+    response = make_response(pdf)
+    response.headers['Content-Type'] = 'application/pdf'
+    response.headers['Content-Disposition'] = f'attachment; filename=PurchaseOrder_{order.id}.pdf'
+
+    return response
+
+import pdfkit
+from flask import send_file
+
+@app.route('/generate_quote_pdf/<int:quote_id>', methods=['GET'])
+@login_required
+def generate_quote_pdf(quote_id):
+    # Fetch the Quote details based on quote_id
+    quote = Quote.query.get_or_404(quote_id)
+    customer = Customer.query.get_or_404(quote.customer_id)
+    line_items = QuoteLineItem.query.filter_by(quote_id=quote_id).all()
+
+    # Render the template for the Quote PDF
+    rendered = render_template('quote_pdf.html', quote=quote, customer=customer, line_items=line_items)
+
+    # Create a PDF using WeasyPrint
+    pdf = HTML(string=rendered).write_pdf()
+
+    # Create a PDF response
+    response = make_response(pdf)
+    response.headers['Content-Type'] = 'application/pdf'
+    response.headers['Content-Disposition'] = f'attachment; filename=Quote_{quote.id}.pdf'
+
+    return response
 
 if __name__ == '__main__':
     app.run(debug=True)

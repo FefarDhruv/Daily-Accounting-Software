@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+
+{% block title %}Create Sales Order{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2>Create Sales Order</h2>
+    <form method="POST" action="{{ url_for('create_sales_order') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <!-- Approved Quote Select -->
+        <div class="form-group">
+            <label for="quote_id">Select Approved Quote</label>
+            <select class="form-control" id="quote_id" name="quote_id" onchange="populateQuoteDetails()" required>
+                <option value="">-- Select Approved Quote --</option>
+                {% for quote in approved_quotes %}
+                <option value="{{ quote.id }}">{{ quote.quote_number }} - {{ quote.customer.customer_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- Order Number Field (Populated from Quote) -->
+        <div class="form-group">
+            <label for="order_number">Order Number</label>
+            <input type="text" class="form-control" id="order_number" name="order_number" placeholder="Enter Order Number" required readonly>
+        </div>
+
+        <!-- Customer Select (Populated from Quote) -->
+        <div class="form-group">
+            <label for="customer_id">Select Customer</label>
+            <select class="form-control" id="customer_id" name="customer_id" required readonly>
+                {% for customer in customers %}
+                <option value="{{ customer.id }}">{{ customer.customer_name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- Order Date (Populated from Quote) -->
+        <div class="form-group">
+            <label for="order_date">Order Date</label>
+            <input type="date" class="form-control" id="order_date" name="order_date" required readonly>
+        </div>
+
+        <!-- Line Items Section (Populated from Quote) -->
+        <div id="line-items-section">
+            <h5>Line Items</h5>
+        </div>
+
+        <!-- Total Amount (Populated from Quote) -->
+        <div class="form-group mt-4">
+            <label for="total_amount">Total Amount</label>
+            <input type="number" class="form-control" id="total_amount" name="total_amount" step="0.01" required readonly>
+        </div>
+
+        <!-- Status -->
+        <div class="form-group">
+            <label for="status">Status</label>
+            <select class="form-control" id="status" name="status" required>
+                <option value="Pending">Pending</option>
+                <option value="Completed">Completed</option>
+                <option value="Cancelled">Cancelled</option>
+            </select>
+        </div>
+
+        <button type="submit" class="btn btn-dark">Create Sales Order</button>
+    </form>
+</div>
+
+<!-- JavaScript to handle dynamic line items and total calculation -->
+<script>
+// Function to populate the form based on selected quote
+function populateQuoteDetails() {
+    var quoteId = document.getElementById('quote_id').value;
+    if (quoteId) {
+        // Fetch quote details using AJAX
+        fetch(`/get_quote_details/${quoteId}`)
+            .then(response => response.json())
+            .then(data => {
+                // Set the form fields to match the selected quote's details
+                document.getElementById('order_number').value = data.quote_number;
+                document.getElementById('customer_id').value = data.customer_id;
+                document.getElementById('order_date').value = data.quote_date;
+                document.getElementById('total_amount').value = data.total_amount;
+
+                // Populate line items from the quote
+                var lineItemsSection = document.getElementById('line-items-section');
+                lineItemsSection.innerHTML = '';  // Clear existing line items
+
+                // Populate the line items
+                data.line_items.forEach(item => {
+                    var newItem = document.createElement('div');
+                    newItem.classList.add('line-item', 'row', 'mb-3');
+
+                    newItem.innerHTML = `
+                        <div class="form-group col-md-4">
+                            <label for="product_id">Product</label>
+                            <select class="form-control" name="product_id[]" required>
+                                {% for product in products %}
+                                <option value="{{ product.id }}" ${item.product_id == {{ product.id }} ? 'selected' : ''}>
+                                    {{ product.product_name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="form-group col-md-3">
+                            <label for="quantity">Quantity</label>
+                            <input type="number" class="form-control" name="quantity[]" placeholder="Quantity" min="1" value="${item.quantity}" required oninput="calculateTotal()">
+                        </div>
+                        <div class="form-group col-md-3">
+                            <label for="unit_price">Unit Price</label>
+                            <input type="number" class="form-control" name="unit_price[]" placeholder="Unit Price" step="0.01" value="${item.unit_price}" required oninput="calculateTotal()">
+                        </div>
+                        <div class="form-group col-md-3">
+                            <button type="button" class="btn btn-danger remove-item">Remove</button>
+                        </div>
+                    `;
+                    lineItemsSection.appendChild(newItem);
+                });
+
+                calculateTotal();  // Recalculate the total
+            });
+    }
+}
+
+// Function to calculate total amount
+function calculateTotal() {
+    var total = 0;
+    var lineItems = document.querySelectorAll('.line-item');
+    lineItems.forEach(function(item) {
+        var quantity = item.querySelector('input[name="quantity[]"]').value;
+        var unitPrice = item.querySelector('input[name="unit_price[]"]').value;
+        if (quantity && unitPrice) {
+            total += parseFloat(quantity) * parseFloat(unitPrice);
+        }
+    });
+    document.getElementById('total_amount').value = total.toFixed(2);
+}
+
+// Event listener for remove item button
+document.querySelectorAll('.remove-item').forEach(function(button) {
+    button.addEventListener('click', function() {
+        button.parentElement.parentElement.remove();
+        calculateTotal();
+    });
+});
+</script>
+{% endblock %}

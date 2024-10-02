@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Shipment{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2>Edit Shipment</h2>
+    <form method="POST" action="{{ url_for('edit_shipment', shipment_id=shipment.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <!-- Shipment Number (Read-only) -->
+        <div class="form-group">
+            <label for="shipment_number">Shipment Number</label>
+            <input type="text" class="form-control" id="shipment_number" name="shipment_number" value="{{ shipment.shipment_number }}" readonly>
+        </div>
+
+        <!-- Invoice Select -->
+        <div class="form-group">
+            <label for="invoice_id">Select Invoice</label>
+            <select class="form-control" id="invoice_id" name="invoice_id" required>
+                {% for invoice in invoices %}
+                <option value="{{ invoice.id }}" {% if shipment.invoice_id == invoice.id %}selected{% endif %}>
+                    {{ invoice.invoice_number }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- Shipment Date -->
+        <div class="form-group">
+            <label for="shipment_date">Shipment Date</label>
+            <input type="date" class="form-control" id="shipment_date" name="shipment_date" value="{{ shipment.shipment_date }}" required>
+        </div>
+
+        <!-- Carrier -->
+        <div class="form-group">
+            <label for="carrier">Carrier</label>
+            <input type="text" class="form-control" id="carrier" name="carrier" value="{{ shipment.carrier }}">
+        </div>
+
+        <!-- Tracking Number -->
+        <div class="form-group">
+            <label for="tracking_number">Tracking Number</label>
+            <input type="text" class="form-control" id="tracking_number" name="tracking_number" value="{{ shipment.tracking_number }}">
+        </div>
+
+        <!-- Status -->
+        <div class="form-group">
+            <label for="status">Status</label>
+            <select class="form-control" id="status" name="status" required>
+                <option value="Pending" {% if shipment.status == 'Pending' %}selected{% endif %}>Pending</option>
+                <option value="Completed" {% if shipment.status == 'Completed' %}selected{% endif %}>Completed</option>
+                <option value="Cancelled" {% if shipment.status == 'Cancelled' %}selected{% endif %}>Cancelled</option>
+            </select>
+        </div>
+
+        <!-- Stage -->
+        <div class="form-group">
+            <label for="stage">Stage</label>
+            <select class="form-control" id="stage" name="stage" required>
+                <option value="Pending" {% if shipment.stage == 'Pending' %}selected{% endif %}>Pending</option>
+                <option value="Shipped" {% if shipment.stage == 'Shipped' %}selected{% endif %}>Shipped</option>
+                <option value="In Transit" {% if shipment.stage == 'In Transit' %}selected{% endif %}>In Transit</option>
+                <option value="Delivered" {% if shipment.stage == 'Delivered' %}selected{% endif %}>Delivered</option>
+                <option value="Cancelled" {% if shipment.stage == 'Cancelled' %}selected{% endif %}>Cancelled</option>
+            </select>
+        </div>
+
+        <button type="submit" class="btn btn-dark">Update Shipment</button>
+    </form>
+</div>
+{% endblock %}

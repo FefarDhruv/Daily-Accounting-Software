@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+
+{% block title %}Shipment List{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2>Shipment List</h2>
+
+    <!-- Toggle Button for Switching Views -->
+    <div class="text-center mb-4">
+        <button class="btn btn-info" id="toggleViewBtn">Switch to Kanban View</button>
+    </div>
+
+    <!-- Table View -->
+    <div id="tableView" class="container mt-5">
+        <table class="table table-bordered">
+            <thead>
+                <tr>
+                    <th>Invoice Number</th>
+                    <th>Shipment Date</th>
+                    <th>Total Amount</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for shipment in shipments %}
+                <tr>
+                    <td>{{ shipment.invoice.invoice_number }}</td>
+                    <td>{{ shipment.shipment_date }}</td>
+                    <td>{{ shipment.total_amount }}</td>
+                    <td>
+                        <!-- Status Dropdown with Direct Submission -->
+                        <form action="/update_shipment_status/{{ shipment.id }}" method="POST">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <select name="status" class="form-control" onchange="this.form.submit()">
+                                <option value="Pending" {% if shipment.status == 'Pending' %}selected{% endif %}>Pending</option>
+                                <option value="In Transit" {% if shipment.status == 'In Transit' %}selected{% endif %}>In Transit</option>
+                                <option value="Delivered" {% if shipment.status == 'Delivered' %}selected{% endif %}>Delivered</option>
+                                <option value="Cancelled" {% if shipment.status == 'Cancelled' %}selected{% endif %}>Cancelled</option>
+                            </select>
+                        </form>
+                    </td>
+                    <td>
+                        <a href="/edit_shipment/{{ shipment.id }}" class="btn btn-warning btn-sm">Edit</a>
+                        <form action="/delete_shipment/{{ shipment.id }}" method="POST" style="display:inline-block;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Kanban View -->
+    <div id="kanbanView" style="display: none;">
+        <div class="row">
+            <!-- Pending Column -->
+            <div class="col-md-3">
+                <h3>Pending</h3>
+                <ul id="pending" class="list-group kanban-column">
+                    {% for shipment in shipments if shipment.status == 'Pending' %}
+                    <li class="list-group-item" data-id="{{ shipment.id }}">
+                        <strong>{{ shipment.invoice.invoice_number }}</strong><br>
+                        Shipment Date: {{ shipment.shipment_date }}<br>
+                        Total: {{ shipment.total_amount }}<br>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <!-- In Transit Column -->
+            <div class="col-md-3">
+                <h3>In Transit</h3>
+                <ul id="in_transit" class="list-group kanban-column">
+                    {% for shipment in shipments if shipment.status == 'In Transit' %}
+                    <li class="list-group-item" data-id="{{ shipment.id }}">
+                        <strong>{{ shipment.invoice.invoice_number }}</strong><br>
+                        Shipment Date: {{ shipment.shipment_date }}<br>
+                        Total: {{ shipment.total_amount }}<br>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <!-- Delivered Column -->
+            <div class="col-md-3">
+                <h3>Delivered</h3>
+                <ul id="delivered" class="list-group kanban-column">
+                    {% for shipment in shipments if shipment.status == 'Delivered' %}
+                    <li class="list-group-item" data-id="{{ shipment.id }}">
+                        <strong>{{ shipment.invoice.invoice_number }}</strong><br>
+                        Shipment Date: {{ shipment.shipment_date }}<br>
+                        Total: {{ shipment.total_amount }}<br>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <!-- Cancelled Column -->
+            <div class="col-md-3">
+                <h3>Cancelled</h3>
+                <ul id="cancelled" class="list-group kanban-column">
+                    {% for shipment in shipments if shipment.status == 'Cancelled' %}
+                    <li class="list-group-item" data-id="{{ shipment.id }}">
+                        <strong>{{ shipment.invoice.invoice_number }}</strong><br>
+                        Shipment Date: {{ shipment.shipment_date }}<br>
+                        Total: {{ shipment.total_amount }}<br>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add New Shipment Button -->
+    <div class="text-center mt-4">
+        <a href="/create_shipment" class="btn btn-dark">Add New Shipment</a>
+    </div>
+</div>
+
+<!-- Include Sortable.js for drag-and-drop functionality -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+
+<script>
+// Initialize Sortable.js for each Kanban column
+['pending', 'in_transit', 'delivered', 'cancelled'].forEach(function(status) {
+    new Sortable(document.getElementById(status), {
+        group: 'kanban',
+        animation: 150,
+        onEnd: function(evt) {
+            let shipmentId = evt.item.getAttribute('data-id');
+            let newStatus = evt.to.id;
+            updateShipmentStatus(shipmentId, newStatus);
+        }
+    });
+});
+
+// Function to update shipment status via AJAX
+function updateShipmentStatus(shipmentId, newStatus) {
+    fetch(`/update_shipment_status/${shipmentId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token() }}'  // Ensure CSRF token is included
+        },
+        body: JSON.stringify({ status: newStatus })
+    }).then(response => {
+        if (response.ok) {
+            console.log(`Shipment ${shipmentId} updated to ${newStatus}`);
+            // Optional: Reload to reflect status change
+            location.reload();
+        } else {
+            console.error('Failed to update shipment status');
+        }
+    });
+}
+
+// Toggle between Table and Kanban view
+const toggleBtn = document.getElementById('toggleViewBtn');
+const tableView = document.getElementById('tableView');
+const kanbanView = document.getElementById('kanbanView');
+
+toggleBtn.addEventListener('click', function() {
+    if (tableView.style.display === 'none') {
+        tableView.style.display = 'block';
+        kanbanView.style.display = 'none';
+        toggleBtn.textContent = 'Switch to Kanban View';
+    } else {
+        tableView.style.display = 'none';
+        kanbanView.style.display = 'block';
+        toggleBtn.textContent = 'Switch to Table View';
+    }
+});
+</script>
+
+<style>
+.kanban-column {
+    min-height: 300px;
+    background-color: #f8f9fa;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+}
+.list-group-item {
+    cursor: grab;
+}
+</style>
+{% endblock %}

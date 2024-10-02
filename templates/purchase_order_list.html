@@ -11,7 +11,7 @@
         <button class="btn btn-info" id="toggleViewBtn">Switch to Kanban View</button>
     </div>
 
-    <!-- Table View (added ID for toggling) -->
+    <!-- Table View -->
     <div id="tableView" class="container mt-5">
         <h2>Purchase Order List</h2>
         <table class="table table-bordered">
@@ -31,25 +31,29 @@
                     <td>{{ order.order_date }}</td>
                     <td>{{ order.total_amount }}</td>
                     <td>
-                        <!-- Status Dropdown with Direct Submission -->
                         <form action="/update_status/{{ order.id }}" method="POST">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <select name="status" class="form-control" onchange="this.form.submit()">
-        <option value="Pending" {% if order.status == 'Pending' %}selected{% endif %}>Pending</option>
-        <option value="Completed" {% if order.status == 'Completed' %}selected{% endif %}>Completed</option>
-        <option value="Cancelled" {% if order.status == 'Cancelled' %}selected{% endif %}>Cancelled</option>
-    </select>
-</form>
-
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <select name="status" class="form-control" onchange="this.form.submit()" {% if order.status == 'Billed' %}disabled{% endif %}>
+                                <option value="Pending" {% if order.status == 'Pending' %}selected{% endif %}>Pending</option>
+                                <option value="Completed" {% if order.status == 'Completed' %}selected{% endif %}>Completed</option>
+                                <option value="Cancelled" {% if order.status == 'Cancelled' %}selected{% endif %}>Cancelled</option>
+                                <option value="Billed" {% if order.status == 'Billed' %}selected{% endif %}>Billed</option>
+                            </select>
+                        </form>
                     </td>
                     <td>
-    <a href="/edit_purchase_order/{{ order.id }}" class="btn btn-warning btn-sm">Edit</a>
-    <a href="/create_bill?purchase_order_id={{ order.id }}" class="btn btn-primary btn-sm">Create Bill</a> <!-- New button to create a bill -->
-    <form action="/delete_purchase_order/{{ order.id }}" method="POST" style="display:inline-block;">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+    <a href="/generate_purchase_order_pdf/{{ order.id }}" class="btn btn-dark btn-sm">Print PDF</a>
     </form>
 </td>
+
+                    <td>
+                        <a href="/edit_purchase_order/{{ order.id }}" class="btn btn-warning btn-sm" {% if order.status == 'Billed' %}style="pointer-events: none; opacity: 0.6;"{% endif %}>Edit</a>
+                        <a href="/create_bill?purchase_order_id={{ order.id }}" class="btn btn-primary btn-sm" {% if order.status == 'Billed' %}style="pointer-events: none; opacity: 0.6;"{% endif %}>Create Bill</a>
+                        <form action="/delete_purchase_order/{{ order.id }}" method="POST" style="display:inline-block;" {% if order.status == 'Billed' %}style="pointer-events: none; opacity: 0.6;"{% endif %}>
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-danger btn-sm" {% if order.status == 'Billed' %}style="pointer-events: none; opacity: 0.6;"{% endif %}>Delete</button>
+                        </form>
+                    </td>
 
                 </tr>
                 {% endfor %}
@@ -61,7 +65,7 @@
     <div id="kanbanView" style="display: none;">
         <div class="row">
             <!-- Pending Column -->
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <h3>Pending</h3>
                 <ul id="pending" class="list-group kanban-column">
                     {% for order in purchase_orders if order.status == 'Pending' %}
@@ -75,7 +79,7 @@
             </div>
 
             <!-- Completed Column -->
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <h3>Completed</h3>
                 <ul id="completed" class="list-group kanban-column">
                     {% for order in purchase_orders if order.status == 'Completed' %}
@@ -89,11 +93,25 @@
             </div>
 
             <!-- Cancelled Column -->
-            <div class="col-md-4">
+            <div class="col-md-3">
                 <h3>Cancelled</h3>
                 <ul id="cancelled" class="list-group kanban-column">
                     {% for order in purchase_orders if order.status == 'Cancelled' %}
                     <li class="list-group-item" data-id="{{ order.id }}">
+                        <strong>{{ order.vendor.vendor_name }}</strong><br>
+                        Order Date: {{ order.order_date }}<br>
+                        Total: {{ order.total_amount }}<br>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <!-- Billed Column -->
+            <div class="col-md-3">
+                <h3>Billed</h3>
+                <ul id="billed" class="list-group kanban-column no-drag">
+                    {% for order in purchase_orders if order.status == 'Billed' %}
+                    <li class="list-group-item" data-id="{{ order.id }}" style="pointer-events: none; opacity: 0.6;">
                         <strong>{{ order.vendor.vendor_name }}</strong><br>
                         Order Date: {{ order.order_date }}<br>
                         Total: {{ order.total_amount }}<br>
@@ -114,7 +132,7 @@
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
 
 <script>
-// Initialize Sortable.js for each Kanban column
+// Initialize Sortable.js for each Kanban column except Billed
 ['pending', 'completed', 'cancelled'].forEach(function(status) {
     new Sortable(document.getElementById(status), {
         group: 'kanban',
@@ -175,6 +193,11 @@ toggleBtn.addEventListener('click', function() {
 }
 .list-group-item {
     cursor: grab;
+}
+.no-drag .list-group-item {
+    cursor: not-allowed;
+    pointer-events: none;
+    opacity: 0.6;
 }
 </style>
 {% endblock %}

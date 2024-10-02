@@ -9,7 +9,7 @@
     <form method="POST" action="/create_quote">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-        <!-- Quote Number Field (Add this to the form) -->
+        <!-- Quote Number Field -->
         <div class="form-group">
             <label for="quote_number">Quote Number</label>
             <input type="text" class="form-control" id="quote_number" name="quote_number" placeholder="Enter Quote Number" required>
@@ -36,12 +36,20 @@
             <h5>Line Items</h5>
             <div class="line-item row">
                 <div class="form-group col-md-4">
-                    <input type="text" class="form-control" name="item_name[]" placeholder="Item Name" required>
+                    <label for="product_id">Product</label>
+                    <select class="form-control" name="product_id[]" required>
+                        <option value="">-- Select Product --</option>
+                        {% for product in products %}
+                        <option value="{{ product.id }}">{{ product.product_name }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
                 <div class="form-group col-md-3">
+                    <label for="quantity">Quantity</label>
                     <input type="number" class="form-control" name="quantity[]" placeholder="Quantity" min="1" required oninput="calculateTotal()">
                 </div>
                 <div class="form-group col-md-3">
+                    <label for="unit_price">Unit Price</label>
                     <input type="number" class="form-control" name="unit_price[]" placeholder="Unit Price" step="0.01" required oninput="calculateTotal()">
                 </div>
                 <div class="form-group col-md-2">
@@ -51,7 +59,7 @@
         </div>
 
         <!-- Button to Add More Items -->
-        <button type="button" class="btn btn-primary" id="add-item-btn">Add Item</button>
+        <button type="button" class="btn btn-primary mt-2" id="add-item-btn">Add Item</button>
 
         <!-- Total Amount -->
         <div class="form-group mt-4">
@@ -80,12 +88,17 @@
 document.getElementById('add-item-btn').addEventListener('click', function() {
     var lineItemsSection = document.getElementById('line-items-section');
     var newItem = document.querySelector('.line-item').cloneNode(true);
+
+    // Clear input values and set product select to default
     newItem.querySelectorAll('input').forEach(function(input) {
         input.value = '';
     });
+    newItem.querySelector('select').selectedIndex = 0;
+
+    // Append the new item and bind event listeners
     lineItemsSection.appendChild(newItem);
 
-    // Add remove event to the new remove button
+    // Bind event listener for remove button
     newItem.querySelector('.remove-item').addEventListener('click', function() {
         newItem.remove();
         calculateTotal();
@@ -106,7 +119,7 @@ function calculateTotal() {
     document.getElementById('total_amount').value = total.toFixed(2);
 }
 
-// Event listener for remove item button
+// Initial bind for the remove button of the first line item
 document.querySelectorAll('.remove-item').forEach(function(button) {
     button.addEventListener('click', function() {
         button.parentElement.parentElement.remove();

@@ -27,11 +27,14 @@
                 <td>{{ bill.status }}</td>
                 <td>
                     <a href="/edit_bill/{{ bill.id }}" class="btn btn-warning btn-sm">Edit</a>
+                    <a href="/generate_bill_pdf/{{ bill.id }}" class="btn btn-dark btn-sm">Generate PDF</a>
                     <form action="/delete_bill/{{ bill.id }}" method="POST" style="display:inline-block;">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                         <button type="submit" class="btn btn-danger btn-sm">Delete</button>
                     </form>
                 </td>
+
+
             </tr>
             {% endfor %}
         </tbody>

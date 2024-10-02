@@ -1,55 +1,57 @@
+<!-- templates/edit_invoice.html -->
 {% extends "base.html" %}
 
-{% block title %}Create Purchase Order{% endblock %}
+{% block title %}Edit Invoice{% endblock %}
 
 {% block content %}
 <div class="container mt-5">
-    <h2>Create Purchase Order</h2>
-    <form method="POST" action="/purchase_order">
+    <h2>Edit Invoice</h2>
+    <form method="POST" action="{{ url_for('edit_invoice', invoice_id=invoice.id) }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-        <!-- Vendor Select -->
+        <!-- Invoice Number (Read-only) -->
         <div class="form-group">
-            <label for="vendor_id">Select Vendor</label>
-            <select class="form-control" id="vendor_id" name="vendor_id" required>
-                {% for vendor in vendors %}
-                <option value="{{ vendor.id }}">{{ vendor.vendor_name }}</option>
+            <label for="invoice_number">Invoice Number</label>
+            <input type="text" class="form-control" id="invoice_number" name="invoice_number" value="{{ invoice.invoice_number }}" readonly>
+        </div>
+
+        <!-- Customer Select -->
+        <div class="form-group">
+            <label for="customer_id">Select Customer</label>
+            <select class="form-control" id="customer_id" name="customer_id" required>
+                {% for customer in customers %}
+                <option value="{{ customer.id }}" {% if invoice.customer_id == customer.id %}selected{% endif %}>
+                    {{ customer.customer_name }}
+                </option>
                 {% endfor %}
             </select>
         </div>
 
-        <!-- Order Date -->
+        <!-- Invoice Date -->
         <div class="form-group">
-            <label for="order_date">Order Date</label>
-            <input type="date" class="form-control" id="order_date" name="order_date" required>
+            <label for="invoice_date">Invoice Date</label>
+            <input type="date" class="form-control" id="invoice_date" name="invoice_date" value="{{ invoice.invoice_date }}" required>
         </div>
 
         <!-- Line Items Section -->
         <div id="line-items-section">
             <h5>Line Items</h5>
-            <div class="line-item row">
-                <!-- Product Lookup Dropdown -->
+            {% for line_item in invoice.line_items %}
+            <div class="line-item row mb-3">
                 <div class="form-group col-md-4">
-                    <label for="product_id">Product</label>
-                    <select class="form-control" name="product_id[]" required>
-                        {% for product in products %}
-                        <option value="{{ product.id }}">{{ product.product_name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <!-- Quantity and Unit Price Fields -->
-                <div class="form-group col-md-3">
-                    <label for="quantity">Quantity</label>
-                    <input type="number" class="form-control" name="quantity[]" placeholder="Quantity" min="1" required oninput="calculateTotal()">
+                    <input type="text" class="form-control" name="item_name[]" placeholder="Item Name" value="{{ line_item.item_name }}" required>
                 </div>
                 <div class="form-group col-md-3">
-                    <label for="unit_price">Unit Price</label>
-                    <input type="number" class="form-control" name="unit_price[]" placeholder="Unit Price" step="0.01" required oninput="calculateTotal()">
+                    <input type="number" class="form-control" name="quantity[]" placeholder="Quantity" min="1" value="{{ line_item.quantity }}" required oninput="calculateTotal()">
+                </div>
+                <div class="form-group col-md-3">
+                    <input type="number" class="form-control" name="unit_price[]" placeholder="Unit Price" step="0.01" value="{{ line_item.unit_price }}" required oninput="calculateTotal()">
                 </div>
                 <div class="form-group col-md-2">
                     <button type="button" class="btn btn-danger remove-item">Remove</button>
                 </div>
             </div>
+            {% endfor %}
         </div>
 
         <!-- Button to Add More Items -->
@@ -58,24 +60,24 @@
         <!-- Total Amount -->
         <div class="form-group mt-4">
             <label for="total_amount">Total Amount</label>
-            <input type="number" class="form-control" id="total_amount" name="total_amount" step="0.01" required readonly>
+            <input type="number" class="form-control" id="total_amount" name="total_amount" step="0.01" value="{{ invoice.total_amount }}" required readonly>
         </div>
 
         <!-- Status -->
         <div class="form-group">
             <label for="status">Status</label>
             <select class="form-control" id="status" name="status" required>
-                <option value="Pending">Pending</option>
-                <option value="Completed">Completed</option>
-                <option value="Cancelled">Cancelled</option>
+                <option value="Pending" {% if invoice.status == 'Pending' %}selected{% endif %}>Pending</option>
+                <option value="Paid" {% if invoice.status == 'Paid' %}selected{% endif %}>Paid</option>
+                <option value="Cancelled" {% if invoice.status == 'Cancelled' %}selected{% endif %}>Cancelled</option>
             </select>
         </div>
 
-        <button type="submit" class="btn btn-dark">Create Purchase Order</button>
+        <!-- Submit Button -->
+        <button type="submit" class="btn btn-dark">Update Invoice</button>
     </form>
 </div>
 
-<!-- JavaScript to handle dynamic line items and total calculation -->
 <script>
 document.getElementById('add-item-btn').addEventListener('click', function() {
     var lineItemsSection = document.getElementById('line-items-section');
@@ -91,7 +93,6 @@ document.getElementById('add-item-btn').addEventListener('click', function() {
     });
 });
 
-// Function to calculate total amount
 function calculateTotal() {
     var total = 0;
     var lineItems = document.querySelectorAll('.line-item');
@@ -105,7 +106,6 @@ function calculateTotal() {
     document.getElementById('total_amount').value = total.toFixed(2);
 }
 
-// Event listener for remove item button
 document.querySelectorAll('.remove-item').forEach(function(button) {
     button.addEventListener('click', function() {
         button.parentElement.parentElement.remove();

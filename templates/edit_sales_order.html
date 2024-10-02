@@ -1,19 +1,27 @@
 {% extends "base.html" %}
 
-{% block title %}Create Purchase Order{% endblock %}
+{% block title %}Edit Sales Order{% endblock %}
 
 {% block content %}
 <div class="container mt-5">
-    <h2>Create Purchase Order</h2>
-    <form method="POST" action="/purchase_order">
+    <h2>Edit Sales Order</h2>
+    <form method="POST" action="{{ url_for('edit_sales_order', sales_order_id=sales_order.id) }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
-        <!-- Vendor Select -->
+        <!-- Order Number (Read-only) -->
         <div class="form-group">
-            <label for="vendor_id">Select Vendor</label>
-            <select class="form-control" id="vendor_id" name="vendor_id" required>
-                {% for vendor in vendors %}
-                <option value="{{ vendor.id }}">{{ vendor.vendor_name }}</option>
+            <label for="order_number">Order Number</label>
+            <input type="text" class="form-control" id="order_number" name="order_number" value="{{ sales_order.order_number }}" readonly>
+        </div>
+
+        <!-- Customer Select -->
+        <div class="form-group">
+            <label for="customer_id">Select Customer</label>
+            <select class="form-control" id="customer_id" name="customer_id" required>
+                {% for customer in customers %}
+                <option value="{{ customer.id }}" {% if sales_order.customer_id == customer.id %}selected{% endif %}>
+                    {{ customer.customer_name }}
+                </option>
                 {% endfor %}
             </select>
         </div>
@@ -21,35 +29,38 @@
         <!-- Order Date -->
         <div class="form-group">
             <label for="order_date">Order Date</label>
-            <input type="date" class="form-control" id="order_date" name="order_date" required>
+            <input type="date" class="form-control" id="order_date" name="order_date" value="{{ sales_order.order_date }}" required>
         </div>
 
         <!-- Line Items Section -->
         <div id="line-items-section">
             <h5>Line Items</h5>
-            <div class="line-item row">
-                <!-- Product Lookup Dropdown -->
-                <div class="form-group col-md-4">
-                    <label for="product_id">Product</label>
-                    <select class="form-control" name="product_id[]" required>
-                        {% for product in products %}
-                        <option value="{{ product.id }}">{{ product.product_name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <!-- Quantity and Unit Price Fields -->
+            {% for line_item in line_items %}
+            <div class="line-item row mb-3">
+                <!-- Replace item_name field with a product dropdown -->
+<div class="form-group col-md-4">
+    <label for="product_id">Product</label>
+    <select class="form-control" name="product_id[]" required>
+        <option value="">-- Select Product --</option>
+        {% for product in products %}
+        <option value="{{ product.id }}" {% if line_item and line_item.product_id == product.id %}selected{% endif %}>
+            {{ product.product_name }}
+        </option>
+        {% endfor %}
+    </select>
+</div>
+
                 <div class="form-group col-md-3">
-                    <label for="quantity">Quantity</label>
-                    <input type="number" class="form-control" name="quantity[]" placeholder="Quantity" min="1" required oninput="calculateTotal()">
+                    <input type="number" class="form-control" name="quantity[]" placeholder="Quantity" min="1" value="{{ line_item.quantity }}" required oninput="calculateTotal()">
                 </div>
                 <div class="form-group col-md-3">
-                    <label for="unit_price">Unit Price</label>
-                    <input type="number" class="form-control" name="unit_price[]" placeholder="Unit Price" step="0.01" required oninput="calculateTotal()">
+                    <input type="number" class="form-control" name="unit_price[]" placeholder="Unit Price" step="0.01" value="{{ line_item.unit_price }}" required oninput="calculateTotal()">
                 </div>
                 <div class="form-group col-md-2">
                     <button type="button" class="btn btn-danger remove-item">Remove</button>
                 </div>
             </div>
+            {% endfor %}
         </div>
 
         <!-- Button to Add More Items -->
@@ -58,20 +69,21 @@
         <!-- Total Amount -->
         <div class="form-group mt-4">
             <label for="total_amount">Total Amount</label>
-            <input type="number" class="form-control" id="total_amount" name="total_amount" step="0.01" required readonly>
+            <input type="number" class="form-control" id="total_amount" name="total_amount" step="0.01" value="{{ sales_order.total_amount }}" required readonly>
         </div>
 
         <!-- Status -->
         <div class="form-group">
             <label for="status">Status</label>
             <select class="form-control" id="status" name="status" required>
-                <option value="Pending">Pending</option>
-                <option value="Completed">Completed</option>
-                <option value="Cancelled">Cancelled</option>
+                <option value="Pending" {% if sales_order.status == 'Pending' %}selected{% endif %}>Pending</option>
+                <option value="Completed" {% if sales_order.status == 'Completed' %}selected{% endif %}>Completed</option>
+                <option value="Cancelled" {% if sales_order.status == 'Cancelled' %}selected{% endif %}>Cancelled</option>
             </select>
         </div>
 
-        <button type="submit" class="btn btn-dark">Create Purchase Order</button>
+        <!-- Submit Button -->
+        <button type="submit" class="btn btn-dark">Update Sales Order</button>
     </form>
 </div>
 
