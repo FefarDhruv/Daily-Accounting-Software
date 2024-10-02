@@ -1542,6 +1542,7 @@ def create_invoice():
             new_invoice_number = "1"  # Start with '1' if there are no invoices in the system
 
         customer_id = request.form['customer_id']
+        product_ids = request.form.getlist('product_id[]')
         invoice_date = datetime.strptime(request.form['invoice_date'], '%Y-%m-%d')
         total_amount = float(request.form['total_amount'])
         status = request.form['status']
@@ -1563,10 +1564,10 @@ def create_invoice():
         quantities = request.form.getlist('quantity[]')
         unit_prices = request.form.getlist('unit_price[]')
 
-        for item_name, quantity, unit_price in zip(item_names, quantities, unit_prices):
+        for product_id, quantity, unit_price in zip(product_ids, quantities, unit_prices):
             new_line_item = InvoiceLineItem(
                 invoice_id=new_invoice.id,
-                item_name=item_name,
+                product_id=int(product_id),
                 quantity=int(quantity),
                 unit_price=float(unit_price)
             )
@@ -1579,7 +1580,8 @@ def create_invoice():
     # Fetch customers belonging to the user's organization for dropdown
     organization_id = session.get('organization_id')
     customers = Customer.query.filter_by(organization_id=organization_id).all()
-    return render_template('create_invoice.html', customers=customers)
+    products = Product.query.filter_by(organization_id=organization_id).all()  # Fetch products for the organization
+    return render_template('create_invoice.html', customers=customers, products=products)
 
 
 @app.route('/edit_invoice/<int:invoice_id>', methods=['GET', 'POST'])
@@ -1626,8 +1628,10 @@ def edit_invoice(invoice_id):
         flash('Invoice updated successfully!', 'success')
         return redirect(url_for('invoice_list'))
 
-    return render_template('edit_invoice.html', invoice=invoice, customers=customers, show_logo=True,
-                           active_tab='invoice')
+    organization_id = session.get('organization_id')
+    customers = Customer.query.filter_by(organization_id=organization_id).all()
+    products = Product.query.filter_by(organization_id=organization_id).all()
+    return render_template('edit_invoice.html', invoice=invoice, customers=customers, products=products)
 
 
 @app.route('/delete_invoice/<int:invoice_id>', methods=['POST'])

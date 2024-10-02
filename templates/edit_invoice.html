@@ -38,15 +38,31 @@
             <h5>Line Items</h5>
             {% for line_item in invoice.line_items %}
             <div class="line-item row mb-3">
+                <!-- Product Dropdown -->
                 <div class="form-group col-md-4">
-                    <input type="text" class="form-control" name="item_name[]" placeholder="Item Name" value="{{ line_item.item_name }}" required>
+                    <label for="product_id">Product</label>
+                    <select class="form-control product-select" name="product_id[]" required>
+                        <option value="">-- Select Product --</option>
+                        {% for product in products %}
+                        <option value="{{ product.id }}" {% if line_item.product_id == product.id %}selected{% endif %}>
+                            {{ product.product_name }}
+                        </option>
+                        {% endfor %}
+                    </select>
                 </div>
+                <!-- Quantity Field -->
                 <div class="form-group col-md-3">
-                    <input type="number" class="form-control" name="quantity[]" placeholder="Quantity" min="1" value="{{ line_item.quantity }}" required oninput="calculateTotal()">
+                    <label for="product_id">Quantity</label>
+
+                    <input type="number" class="form-control quantity" name="quantity[]" placeholder="Quantity" min="1" value="{{ line_item.quantity }}" required>
                 </div>
+                <!-- Unit Price Field -->
                 <div class="form-group col-md-3">
-                    <input type="number" class="form-control" name="unit_price[]" placeholder="Unit Price" step="0.01" value="{{ line_item.unit_price }}" required oninput="calculateTotal()">
+                    <label for="product_id">Unit Price</label>
+
+                    <input type="number" class="form-control unit-price" name="unit_price[]" placeholder="Unit Price" step="0.01" value="{{ line_item.unit_price }}" required>
                 </div>
+                <!-- Remove Button -->
                 <div class="form-group col-md-2">
                     <button type="button" class="btn btn-danger remove-item">Remove</button>
                 </div>
@@ -79,37 +95,47 @@
 </div>
 
 <script>
-document.getElementById('add-item-btn').addEventListener('click', function() {
-    var lineItemsSection = document.getElementById('line-items-section');
-    var newItem = document.querySelector('.line-item').cloneNode(true);
-    newItem.querySelectorAll('input').forEach(function(input) {
-        input.value = '';
-    });
-    lineItemsSection.appendChild(newItem);
+document.addEventListener('DOMContentLoaded', function () {
+    // Function to calculate total amount
+    function calculateTotal() {
+        var total = 0;
+        var lineItems = document.querySelectorAll('.line-item');
+        lineItems.forEach(function(item) {
+            var quantity = item.querySelector('input[name="quantity[]"]').value;
+            var unitPrice = item.querySelector('input[name="unit_price[]"]').value;
+            if (quantity && unitPrice) {
+                total += parseFloat(quantity) * parseFloat(unitPrice);
+            }
+        });
+        document.getElementById('total_amount').value = total.toFixed(2);
+    }
 
-    newItem.querySelector('.remove-item').addEventListener('click', function() {
-        newItem.remove();
-        calculateTotal();
-    });
-});
+    // Add event listeners to dynamically update total on quantity and price change
+    function addEventListenersToLineItem(item) {
+        item.querySelector('input[name="quantity[]"]').addEventListener('input', calculateTotal);
+        item.querySelector('input[name="unit_price[]"]').addEventListener('input', calculateTotal);
+        item.querySelector('.remove-item').addEventListener('click', function() {
+            item.remove();
+            calculateTotal();
+        });
+    }
 
-function calculateTotal() {
-    var total = 0;
-    var lineItems = document.querySelectorAll('.line-item');
-    lineItems.forEach(function(item) {
-        var quantity = item.querySelector('input[name="quantity[]"]').value;
-        var unitPrice = item.querySelector('input[name="unit_price[]"]').value;
-        if (quantity && unitPrice) {
-            total += parseFloat(quantity) * parseFloat(unitPrice);
-        }
+    // Initial line item event listeners
+    var initialLineItems = document.querySelectorAll('.line-item');
+    initialLineItems.forEach(function(item) {
+        addEventListenersToLineItem(item);
     });
-    document.getElementById('total_amount').value = total.toFixed(2);
-}
 
-document.querySelectorAll('.remove-item').forEach(function(button) {
-    button.addEventListener('click', function() {
-        button.parentElement.parentElement.remove();
-        calculateTotal();
+    // Add new line item
+    document.getElementById('add-item-btn').addEventListener('click', function() {
+        var lineItemsSection = document.getElementById('line-items-section');
+        var newItem = initialLineItems[0].cloneNode(true); // Clone the first line item
+        newItem.querySelectorAll('input').forEach(function(input) {
+            input.value = '';
+        });
+        newItem.querySelector('select').value = ''; // Clear the product select dropdown
+        lineItemsSection.appendChild(newItem);
+        addEventListenersToLineItem(newItem);
     });
 });
 </script>
