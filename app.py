@@ -1499,11 +1499,19 @@ def delete_sales_order(order_id):
         SalesOrder.organization_id == organization_id
     ).first_or_404()
 
+    # Check if the sales order is associated with a quote
+    if sales_order.quote_id:
+        # Retrieve the associated quote and update its status to 'Draft'
+        quote = Quote.query.get(sales_order.quote_id)
+        if quote:
+            quote.status = 'Draft'
+            db.session.add(quote)
+
+    # Delete the sales order
     db.session.delete(sales_order)
     db.session.commit()
-    flash('Sales Order deleted successfully!', 'success')
+    flash('Sales Order deleted successfully and quote status updated to Draft!', 'success')
     return redirect(url_for('sales_order_list'))
-
 
 # app.py
 
@@ -1798,6 +1806,27 @@ def generate_quote_pdf(quote_id):
     response.headers['Content-Disposition'] = f'attachment; filename=Quote_{quote.id}.pdf'
 
     return response
+
+@app.route('/generate_sales_order_pdf/<int:sales_order_id>', methods=['GET'])
+@login_required
+def generate_sales_order_pdf(sales_order_id):
+    # Fetch the sales order using the provided ID
+    organization_id = session.get('organization_id')
+    sales_order = SalesOrder.query.filter_by(id=sales_order_id, organization_id=organization_id).first_or_404()
+
+    # Fetch the associated line items for this sales order
+    line_items = SalesOrderLineItem.query.filter_by(sales_order_id=sales_order_id).all()
+
+    # Render the template with the sales order and line items data
+    rendered_html = render_template('sales_order_pdf.html', sales_order=sales_order, line_items=line_items)
+
+    # Create a PDF using WeasyPrint
+    pdf = BytesIO()
+    HTML(string=rendered_html).write_pdf(pdf)
+    pdf.seek(0)
+
+    # Return the generated PDF as a response
+    return send_file(pdf, as_attachment=True, download_name=f"SalesOrder_{sales_order.order_number}.pdf", mimetype='application/pdf')
 
 if __name__ == '__main__':
     app.run(debug=True)
