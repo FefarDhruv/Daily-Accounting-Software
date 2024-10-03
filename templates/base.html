@@ -41,16 +41,14 @@
         <a class="nav-link {% if active_tab == 'vendor_master' %}active{% endif %}" href="/vendor_list">Vendors</a>
     </li>
     <li class="nav-item">
-    <a class="nav-link {% if active_tab == 'product' %}active{% endif %}" href="/product_list">Products</a>
-    </li>
-
-    <li class="nav-item">
-                <a class="nav-link" href="{{ url_for('organization_list') }}">Organization</a> <!-- Link to organization_list -->
+        <a class="nav-link {% if active_tab == 'product' %}active{% endif %}" href="/product_list">Products</a>
     </li>
     <li class="nav-item">
-    <a class="nav-link {% if active_tab == 'purchase_order' %}active{% endif %}" href="/purchase_order_list">Purchase Order</a>
+        <a class="nav-link {% if active_tab == 'organization' %}active{% endif %}" href="{{ url_for('organization_list') }}">Organization</a>
     </li>
-
+    <li class="nav-item">
+        <a class="nav-link {% if active_tab == 'purchase_order' %}active{% endif %}" href="/purchase_order_list">Purchase Order</a>
+    </li>
     <li class="nav-item">
         <a class="nav-link {% if active_tab == 'bill' %}active{% endif %}" href="/bill">Bill</a>
     </li>
@@ -70,7 +68,13 @@
         <a class="nav-link {% if active_tab == 'shipment' %}active{% endif %}" href="/shipment_list">Shipment</a>
     </li>
     <li class="nav-item">
-        <a class="nav-link {% if active_tab == 'inventory' %}active{% endif %}" href="/inventory">Inventory</a>
+        <a class="nav-link {% if active_tab == 'inventory' %}active{% endif %}" href="/inventory_list">Inventory</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link {% if active_tab == 'warehouse' %}active{% endif %}" href="/warehouse_list">Warehouse</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
     </li>
 </ul>
 

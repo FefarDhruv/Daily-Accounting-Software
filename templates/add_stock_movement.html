@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}Add Stock Movement{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2>Add Stock Movement</h2>
+    <form method="POST" action="{{ url_for('add_stock_movement', inventory_id=inventory_item.id) }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-group">
+            <label for="movement_type">Movement Type</label>
+            <select class="form-control" id="movement_type" name="movement_type" required>
+                <option value="IN">Stock In</option>
+                <option value="OUT">Stock Out</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="quantity">Quantity</label>
+            <input type="number" class="form-control" id="quantity" name="quantity" required>
+        </div>
+        <div class="form-group">
+            <label for="reference_type">Reference Type (optional)</label>
+            <input type="text" class="form-control" id="reference_type" name="reference_type">
+        </div>
+        <div class="form-group">
+            <label for="reference_id">Reference ID (optional)</label>
+            <input type="number" class="form-control" id="reference_id" name="reference_id">
+        </div>
+        <button type="submit" class="btn btn-primary">Add Movement</button>
+    </form>
+</div>
+{% endblock %}

@@ -273,6 +273,22 @@ class InvoiceLineItem(db.Model):
 
 # app.py or models.py
 
+
+class Warehouse(db.Model):
+    __tablename__ = 'warehouse'
+    id = db.Column(db.Integer, primary_key=True)
+    warehouse_name = db.Column(db.String(100), nullable=False)
+    location = db.Column(db.String(255), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    organization_id = db.Column(db.Integer, db.ForeignKey('setup_organization.id'), nullable=False)
+
+    organization = db.relationship('SetupOrganization', backref=db.backref('warehouses', lazy=True))
+
+    # Establish relationship with Inventory
+    inventory_items = db.relationship('Inventory', backref='warehouse', lazy=True, cascade="all, delete-orphan")
+
 # app.py or models.py
 
 class Shipment(db.Model):
@@ -291,6 +307,40 @@ class Shipment(db.Model):
     invoice = db.relationship('Invoice', backref=db.backref('shipment', uselist=False))  # One-to-One relationship with Invoice
     organization = db.relationship('Organization', backref=db.backref('shipments', lazy=True))
 
+
+# Define the Inventory model
+class Inventory(db.Model):
+    __tablename__ = 'inventory'
+    id = db.Column(db.Integer, primary_key=True)
+    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
+    warehouse_id = db.Column(db.Integer, db.ForeignKey('warehouse.id'), nullable=False)
+    quantity = db.Column(db.Integer, nullable=False, default=0)
+    last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationship with Product
+    product = db.relationship('Product', backref=db.backref('inventory_items', lazy=True))
+
+    def __repr__(self):
+        return f'<Inventory Product ID: {self.product_id}, Quantity: {self.quantity}, Warehouse: {self.warehouse_id}>'
+
+
+# Define the StockMovements model to track stock updates
+class StockMovements(db.Model):
+    __tablename__ = 'stock_movements'
+    id = db.Column(db.Integer, primary_key=True)
+    inventory_id = db.Column(db.Integer, db.ForeignKey('inventory.id'), nullable=False)
+    movement_type = db.Column(db.String(50), nullable=False)  # Options: 'IN' or 'OUT'
+    quantity = db.Column(db.Integer, nullable=False)
+    reference_type = db.Column(db.String(50), nullable=True)  # e.g., 'Purchase Order', 'Sales Order'
+    reference_id = db.Column(db.Integer, nullable=True)  # Reference to the ID of the order
+    movement_date = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # Relationship with Inventory
+    inventory = db.relationship('Inventory',
+                                backref=db.backref('stock_movements', lazy=True, cascade="all, delete-orphan"))
+
+    def __repr__(self):
+        return f'<StockMovement Type: {self.movement_type}, Quantity: {self.quantity}, Date: {self.movement_date}>'
 
 
 # Login Page
@@ -581,9 +631,6 @@ def delete_customer(customer_id):
     return redirect(url_for('customer_list'))
 
 
-
-# Add New Product Page and Form Submission
-# Add New Product Page and Form Submission
 @app.route('/add_product', methods=['GET', 'POST'])
 @login_required
 def add_product():
@@ -636,7 +683,23 @@ def add_product():
             # Attempt to add the new product to the database
             db.session.add(new_product)
             db.session.commit()
-            flash('Product added successfully!', 'success')
+
+            # Create an inventory entry linked to the newly created product
+            default_warehouse = Warehouse.query.filter_by(organization_id=organization_id).first()
+            if not default_warehouse:
+                flash('No warehouse found for the organization. Please add a warehouse first.', 'danger')
+                return redirect(url_for('add_product'))
+
+            new_inventory = Inventory(
+                product_id=new_product.id,
+                quantity=quantity_in_stock,  # Link the initial quantity from the product
+                warehouse_id=default_warehouse.id  # Link to the default warehouse
+            )
+
+            db.session.add(new_inventory)
+            db.session.commit()
+
+            flash('Product and inventory added successfully!', 'success')
             return redirect(url_for('product_list'))
         except IntegrityError:
             db.session.rollback()  # Rollback the session to handle the error
@@ -644,6 +707,7 @@ def add_product():
             return redirect(url_for('add_product'))
 
     return render_template('add_product.html', show_logo=True, active_tab='products')
+
 
 # Edit Product Page and Form Submission
 @app.route('/edit_product/<int:product_id>', methods=['GET', 'POST'])
@@ -1931,7 +1995,7 @@ def shipment_list():
         Invoice.organization_id == organization_id,
         Shipment.organization_id == organization_id
     ).all()
-    return render_template('shipment_list.html', shipments=shipments, show_logo=True, active_tab='shipment')
+    return render_template('shipment_list.html', shipments=shipments, active_tab='shipment')
 
 
 @app.route('/create_shipment', methods=['GET', 'POST'])
@@ -2048,6 +2112,140 @@ def get_invoice_details(invoice_id):
 
     return jsonify(invoice_details)
 
+# Warehouse List View
+@app.route('/warehouse_list')
+@login_required
+def warehouse_list():
+    # Fetch all warehouses for the organization
+    organization_id = session.get('organization_id')
+    warehouses = Warehouse.query.all()
+    return render_template('warehouse_list.html', warehouses=warehouses, active_tab='warehouse')
+
+
+@app.route('/add_warehouse', methods=['GET', 'POST'])
+@login_required
+def add_warehouse():
+    if request.method == 'POST':
+        warehouse_name = request.form.get('warehouse_name')
+        location = request.form.get('location')
+        description = request.form.get('description')
+
+        # Retrieve the organization_id from the session
+        organization_id = session.get('organization_id')
+        if not organization_id:
+            flash('Organization not found. Please log in again.', 'danger')
+            return redirect(url_for('login'))
+
+        # Create a new warehouse object
+        new_warehouse = Warehouse(
+            warehouse_name=warehouse_name,
+            location=location,
+            description=description,
+            organization_id=organization_id,  # Ensure organization_id is set
+            created_at=datetime.now(),
+            updated_at=datetime.now()
+        )
+
+        try:
+            # Attempt to add the new warehouse to the database
+            db.session.add(new_warehouse)
+            db.session.commit()
+            flash('Warehouse added successfully!', 'success')
+            return redirect(url_for('warehouse_list'))
+        except IntegrityError:
+            db.session.rollback()  # Rollback the session to handle the error
+            flash('An error occurred while adding the warehouse. Please try again.', 'danger')
+            return redirect(url_for('add_warehouse'))
+
+    return render_template('add_warehouse.html', show_logo=True, active_tab='warehouse')
+
+
+
+# Edit Warehouse View
+@app.route('/edit_warehouse/<int:warehouse_id>', methods=['GET', 'POST'])
+@login_required
+def edit_warehouse(warehouse_id):
+    warehouse = Warehouse.query.get_or_404(warehouse_id)
+    if request.method == 'POST':
+        warehouse.warehouse_name = request.form['warehouse_name']
+        warehouse.location = request.form['location']
+        warehouse.description = request.form['description']
+        db.session.commit()
+        flash('Warehouse updated successfully!', 'success')
+        return redirect(url_for('warehouse_list'))
+    return render_template('edit_warehouse.html', warehouse=warehouse, active_tab='warehouse')
+
+@app.route('/delete_warehouse/<int:warehouse_id>', methods=['POST'])
+@login_required
+def delete_warehouse(warehouse_id):
+    # Fetch the warehouse using the provided ID
+    warehouse = Warehouse.query.get_or_404(warehouse_id)
+
+    try:
+        # Delete the warehouse
+        db.session.delete(warehouse)
+        db.session.commit()
+        flash('Warehouse deleted successfully!', 'success')
+    except Exception as e:
+        # Rollback in case of an error
+        db.session.rollback()
+        flash(f'An error occurred while deleting the warehouse: {str(e)}', 'danger')
+
+    return redirect(url_for('warehouse_list'))
+
+# Inventory List View
+@app.route('/inventory_list')
+@login_required
+def inventory_list():
+    # Retrieve organization ID and fetch inventory items
+    organization_id = session.get('organization_id')
+    inventory_items = Inventory.query.all()
+    return render_template('inventory_list.html', inventory_items=inventory_items, active_tab='inventory')
+
+
+# Stock Movement Tracking
+@app.route('/stock_movements')
+@login_required
+def stock_movements():
+    # Fetch stock movements
+    stock_movements = StockMovements.query.order_by(StockMovements.movement_date.desc()).all()
+    return render_template('stock_movements.html', stock_movements=stock_movements, active_tab='stock_movements')
+
+
+# Add Stock Movement
+@app.route('/add_stock_movement/<int:inventory_id>', methods=['GET', 'POST'])
+@login_required
+def add_stock_movement(inventory_id):
+    inventory_item = Inventory.query.get_or_404(inventory_id)
+    if request.method == 'POST':
+        movement_type = request.form['movement_type']
+        quantity = int(request.form['quantity'])
+        reference_type = request.form['reference_type']
+        reference_id = request.form['reference_id']
+
+        # Adjust inventory based on movement type
+        if movement_type == 'IN':
+            inventory_item.quantity += quantity
+        elif movement_type == 'OUT' and inventory_item.quantity >= quantity:
+            inventory_item.quantity -= quantity
+        else:
+            flash('Invalid quantity for stock movement.', 'danger')
+            return redirect(url_for('inventory_list'))
+
+        # Create a stock movement record
+        stock_movement = StockMovements(
+            inventory_id=inventory_item.id,
+            movement_type=movement_type,
+            quantity=quantity,
+            reference_type=reference_type,
+            reference_id=reference_id
+        )
+        db.session.add(stock_movement)
+        db.session.commit()
+        flash('Stock movement recorded successfully!', 'success')
+        return redirect(url_for('inventory_list'))
+
+    return render_template('add_stock_movement.html', inventory_item=inventory_item, active_tab='inventory')
 
 if __name__ == '__main__':
     app.run(debug=True)

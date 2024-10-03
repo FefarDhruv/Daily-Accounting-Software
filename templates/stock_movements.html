@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}Stock Movements{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2>Stock Movements</h2>
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>Movement ID</th>
+                <th>Inventory ID</th>
+                <th>Product Name</th>
+                <th>Movement Type</th>
+                <th>Quantity</th>
+                <th>Reference Type</th>
+                <th>Reference ID</th>
+                <th>Date</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for movement in stock_movements %}
+            <tr>
+                <td>{{ movement.id }}</td>
+                <td>{{ movement.inventory_id }}</td>
+                <td>{{ movement.inventory.product.product_name }}</td>
+                <td>{{ movement.movement_type }}</td>
+                <td>{{ movement.quantity }}</td>
+                <td>{{ movement.reference_type }}</td>
+                <td>{{ movement.reference_id }}</td>
+                <td>{{ movement.movement_date.strftime('%Y-%m-%d') }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}Inventory List{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h2>Inventory List</h2>
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>Product ID</th>
+                <th>Product Name</th>
+                <th>Warehouse Name</th>
+                <th>Quantity</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in inventory_items %}
+            <tr>
+                <td>{{ item.product_id }}</td>
+                <td>{{ item.product.product_name }}</td>
+                <td>{{ item.warehouse.warehouse_name }}</td>
+                <td>{{ item.quantity }}</td>
+                <td>
+                    <a href="{{ url_for('add_stock_movement', inventory_id=item.id) }}" class="btn btn-primary btn-sm">Add Stock Movement</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
