@@ -1668,11 +1668,27 @@ def edit_invoice(invoice_id):
 @app.route('/delete_invoice/<int:invoice_id>', methods=['POST'])
 @login_required
 def delete_invoice(invoice_id):
+    # Fetch the invoice using the provided ID
     invoice = Invoice.query.get_or_404(invoice_id)
-    db.session.delete(invoice)
-    db.session.commit()
-    flash('Invoice deleted successfully!', 'success')
+
+    # Check if the invoice has any related sales orders
+    if invoice.sales_orders:
+        for sales_order in invoice.sales_orders:
+            sales_order.status = "Pending"  # Update the status of related sales orders
+
+    try:
+        # Delete the invoice
+        db.session.delete(invoice)
+        db.session.commit()
+        flash('Invoice deleted successfully and sales order status updated to Pending!', 'success')
+    except Exception as e:
+        # Rollback in case of an error
+        db.session.rollback()
+        flash(f'An error occurred while deleting the invoice: {str(e)}', 'danger')
+
     return redirect(url_for('invoice_list'))
+
+
 
 @app.route('/shipment_list')
 @login_required
@@ -1951,6 +1967,31 @@ def get_sales_order_line_items(sales_order_id):
     } for line_item in sales_order.line_items]
 
     return jsonify(line_items)
+
+
+
+@app.route('/generate_invoice_pdf/<int:invoice_id>', methods=['GET'])
+@login_required
+def generate_invoice_pdf(invoice_id):
+    # Fetch the invoice using the provided ID
+    organization_id = session.get('organization_id')
+    invoice = Invoice.query.filter_by(id=invoice_id, organization_id=organization_id).first_or_404()
+
+    # Fetch the associated line items for this invoice
+    line_items = InvoiceLineItem.query.filter_by(invoice_id=invoice_id).all()
+
+    # Render the template with the invoice and line items data
+    rendered_html = render_template('invoice_pdf.html', invoice=invoice, line_items=line_items)
+
+    # Create a PDF using WeasyPrint
+    pdf = BytesIO()
+    HTML(string=rendered_html).write_pdf(pdf)
+    pdf.seek(0)
+
+    # Return the generated PDF as a response
+    return send_file(pdf, as_attachment=True, download_name=f"Invoice_{invoice.invoice_number}.pdf", mimetype='application/pdf')
+
+
 
 if __name__ == '__main__':
     app.run(debug=True)

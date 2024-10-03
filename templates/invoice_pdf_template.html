@@ -1,0 +1,117 @@
+<!-- templates/invoice_pdf_template.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Invoice - {{ invoice.invoice_number }}</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        .invoice-container {
+            width: 800px;
+            margin: auto;
+            padding: 20px;
+            border: 1px solid #ddd;
+        }
+        .invoice-header, .invoice-footer {
+            text-align: center;
+            padding: 10px;
+            background-color: #f8f8f8;
+            margin-bottom: 20px;
+        }
+        .invoice-details {
+            width: 100%;
+            margin-bottom: 20px;
+        }
+        .invoice-details th, .invoice-details td {
+            text-align: left;
+            padding: 8px;
+            border-bottom: 1px solid #ddd;
+        }
+        .line-items {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        .line-items th, .line-items td {
+            border: 1px solid #ddd;
+            padding: 8px;
+        }
+        .total-section {
+            float: right;
+            width: 300px;
+        }
+        .total-section th, .total-section td {
+            padding: 8px;
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+    <div class="invoice-container">
+        <div class="invoice-header">
+            <h1>Invoice</h1>
+            <p>Invoice Number: {{ invoice.invoice_number }}</p>
+        </div>
+
+        <table class="invoice-details">
+            <tr>
+                <th>Customer Name:</th>
+                <td>{{ invoice.customer.customer_name }}</td>
+                <th>Invoice Date:</th>
+                <td>{{ invoice.invoice_date }}</td>
+            </tr>
+            <tr>
+                <th>Order Number:</th>
+                <td>{{ invoice.sales_order.order_number }}</td>
+                <th>Total Amount:</th>
+                <td>{{ invoice.total_amount }}</td>
+            </tr>
+        </table>
+
+        <h3>Line Items</h3>
+        <table class="line-items">
+            <thead>
+                <tr>
+                    <th>Item Name</th>
+                    <th>Quantity</th>
+                    <th>Unit Price</th>
+                    <th>Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for line_item in invoice.line_items %}
+                <tr>
+                    <td>{{ line_item.product.product_name }}</td>
+                    <td>{{ line_item.quantity }}</td>
+                    <td>{{ line_item.unit_price }}</td>
+                    <td>{{ line_item.quantity * line_item.unit_price }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="total-section">
+            <table>
+                <tr>
+                    <th>Subtotal:</th>
+                    <td>{{ invoice.total_amount }}</td>
+                </tr>
+                <tr>
+                    <th>Tax (if any):</th>
+                    <td>0.00</td>
+                </tr>
+                <tr>
+                    <th>Grand Total:</th>
+                    <td>{{ invoice.total_amount }}</td>
+                </tr>
+            </table>
+        </div>
+
+        <div class="invoice-footer">
+            <p>Thank you for your business!</p>
+        </div>
+    </div>
+</body>
+</html>

@@ -34,6 +34,10 @@
                         <button type="submit" class="btn btn-danger btn-sm">Delete</button>
                     </form>
                 </td>
+                <td>
+    <a href="{{ url_for('generate_invoice_pdf', invoice_id=invoice.id) }}" class="btn btn-info btn-sm">Download PDF</a>
+</td>
+
             </tr>
             {% endfor %}
         </tbody>
