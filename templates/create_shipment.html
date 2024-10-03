@@ -19,10 +19,14 @@
         <div class="form-group">
             <label for="invoice_id">Select Invoice</label>
             <select name="invoice_id" class="form-control" id="invoice_id" required>
-                <option value="">-- Select Invoice --</option>
-                {% for invoice in invoices %}
-                <option value="{{ invoice.id }}">{{ invoice.invoice_number }} - {{ invoice.customer.customer_name }}</option>
-                {% endfor %}
+                {% if invoices %}
+                    <option value="">-- Select Invoice --</option>
+                    {% for invoice in invoices %}
+                    <option value="{{ invoice.id }}">{{ invoice.invoice_number }} - {{ invoice.customer.customer_name }}</option>
+                    {% endfor %}
+                {% else %}
+                    <option value="">No invoices available for shipment</option>
+                {% endif %}
             </select>
         </div>
 

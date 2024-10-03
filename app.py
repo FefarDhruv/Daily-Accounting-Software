@@ -273,11 +273,13 @@ class InvoiceLineItem(db.Model):
 
 # app.py or models.py
 
+# app.py or models.py
+
 class Shipment(db.Model):
     __tablename__ = 'shipment'
     id = db.Column(db.Integer, primary_key=True)
     shipment_number = db.Column(db.String(50), nullable=False, unique=True)
-    invoice_id = db.Column(db.Integer, db.ForeignKey('invoice.id'), nullable=False)
+    invoice_id = db.Column(db.Integer, db.ForeignKey('invoice.id'), nullable=False, unique=True)  # Add unique constraint
     shipment_date = db.Column(db.Date, nullable=False)
     carrier = db.Column(db.String(100), nullable=True)
     tracking_number = db.Column(db.String(100), nullable=True)
@@ -286,8 +288,9 @@ class Shipment(db.Model):
     organization_id = db.Column(db.Integer, db.ForeignKey('organization.id'), nullable=False)
 
     # Relationships
-    invoice = db.relationship('Invoice', backref=db.backref('shipments', lazy=True))
+    invoice = db.relationship('Invoice', backref=db.backref('shipment', uselist=False))  # One-to-One relationship with Invoice
     organization = db.relationship('Organization', backref=db.backref('shipments', lazy=True))
+
 
 
 # Login Page
@@ -1934,7 +1937,10 @@ def shipment_list():
 @app.route('/create_shipment', methods=['GET', 'POST'])
 @login_required
 def create_shipment():
+    organization_id = session.get('organization_id')
+
     if request.method == 'POST':
+        # Retrieve form data
         shipment_number = request.form['shipment_number']
         invoice_id = request.form['invoice_id']
         shipment_date = datetime.strptime(request.form['shipment_date'], '%Y-%m-%d')
@@ -1942,8 +1948,14 @@ def create_shipment():
         tracking_number = request.form['tracking_number']
         status = request.form['status']
         stage = request.form['stage']
-        organization_id = session.get('organization_id')
 
+        # Check if a shipment already exists for this invoice
+        existing_shipment = Shipment.query.filter_by(invoice_id=invoice_id, organization_id=organization_id).first()
+        if existing_shipment:
+            flash('Shipment already exists for this invoice. Please select a different invoice.', 'danger')
+            return redirect(url_for('create_shipment'))
+
+        # Create a new shipment for the invoice
         new_shipment = Shipment(
             shipment_number=shipment_number,
             invoice_id=invoice_id,
@@ -1959,9 +1971,10 @@ def create_shipment():
         flash('Shipment created successfully!', 'success')
         return redirect(url_for('shipment_list'))
 
-    # Fetch invoices belonging to the user's organization that are not linked to an existing shipment
-    organization_id = session.get('organization_id')
-    invoices = Invoice.query.filter_by(organization_id=organization_id).all()  # Adjust the filter condition as needed
+    # Fetch invoices that are not linked to any shipment (one-to-one relationship)
+    invoices = Invoice.query.filter_by(organization_id=organization_id).outerjoin(Shipment).filter(
+        Shipment.id == None).all()
+
     return render_template('create_shipment.html', invoices=invoices, show_logo=True, active_tab='shipment')
 
 
