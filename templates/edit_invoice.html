@@ -1,18 +1,31 @@
 <!-- templates/edit_invoice.html -->
 {% extends "base.html" %}
 
-{% block title %}Edit Invoice{% endblock %}
+{% block title %}{{ 'Edit Invoice' if invoice else 'Create Invoice' }}{% endblock %}
 
 {% block content %}
 <div class="container mt-5">
-    <h2>Edit Invoice</h2>
-    <form method="POST" action="{{ url_for('edit_invoice', invoice_id=invoice.id) }}">
+    <h2>{{ 'Edit Invoice' if invoice else 'Create Invoice' }}</h2>
+    <form method="POST" action="{{ url_for('edit_invoice', invoice_id=invoice.id) if invoice else url_for('create_invoice') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
         <!-- Invoice Number (Read-only) -->
         <div class="form-group">
             <label for="invoice_number">Invoice Number</label>
-            <input type="text" class="form-control" id="invoice_number" name="invoice_number" value="{{ invoice.invoice_number }}" readonly>
+            <input type="text" class="form-control" id="invoice_number" name="invoice_number" value="{{ invoice.invoice_number if invoice else '' }}" readonly>
+        </div>
+
+        <!-- Sales Order Select -->
+        <div class="form-group">
+            <label for="sales_order_id">Select Sales Order</label>
+            <select name="sales_order_id" class="form-control" id="sales_order_id" required>
+                <option value="">-- Select Sales Order --</option>
+                {% for sales_order in completed_sales_orders %}
+                <option value="{{ sales_order.id }}" {% if invoice and invoice.sales_order_id == sales_order.id %}selected{% endif %}>
+                    {{ sales_order.order_number }} - {{ sales_order.customer.customer_name }}
+                </option>
+                {% endfor %}
+            </select>
         </div>
 
         <!-- Customer Select -->
@@ -20,7 +33,7 @@
             <label for="customer_id">Select Customer</label>
             <select class="form-control" id="customer_id" name="customer_id" required>
                 {% for customer in customers %}
-                <option value="{{ customer.id }}" {% if invoice.customer_id == customer.id %}selected{% endif %}>
+                <option value="{{ customer.id }}" {% if invoice and invoice.customer_id == customer.id %}selected{% endif %}>
                     {{ customer.customer_name }}
                 </option>
                 {% endfor %}
@@ -30,44 +43,101 @@
         <!-- Invoice Date -->
         <div class="form-group">
             <label for="invoice_date">Invoice Date</label>
-            <input type="date" class="form-control" id="invoice_date" name="invoice_date" value="{{ invoice.invoice_date }}" required>
+            <input type="date" class="form-control" id="invoice_date" name="invoice_date" value="{{ invoice.invoice_date if invoice else '' }}" required>
         </div>
 
         <!-- Line Items Section -->
         <div id="line-items-section">
             <h5>Line Items</h5>
-            {% for line_item in invoice.line_items %}
-            <div class="line-item row mb-3">
-                <!-- Product Dropdown -->
-                <div class="form-group col-md-4">
-                    <label for="product_id">Product</label>
-                    <select class="form-control product-select" name="product_id[]" required>
-                        <option value="">-- Select Product --</option>
-                        {% for product in products %}
-                        <option value="{{ product.id }}" {% if line_item.product_id == product.id %}selected{% endif %}>
-                            {{ product.product_name }}
-                        </option>
-                        {% endfor %}
-                    </select>
+            <!-- Display existing line items if invoice is present, otherwise use sales order line items -->
+            {% if invoice and invoice.line_items %}
+                {% for line_item in invoice.line_items %}
+                <div class="line-item row mb-3">
+                    <!-- Product Dropdown -->
+                    <div class="form-group col-md-4">
+                        <label for="product_id">Product</label>
+                        <select class="form-control product-select" name="product_id[]" required>
+                            <option value="">-- Select Product --</option>
+                            {% for product in products %}
+                            <option value="{{ product.id }}" {% if line_item.product_id == product.id %}selected{% endif %}>
+                                {{ product.product_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <!-- Quantity Field -->
+                    <div class="form-group col-md-3">
+                        <label for="quantity">Quantity</label>
+                        <input type="number" class="form-control quantity" name="quantity[]" placeholder="Quantity" min="1" value="{{ line_item.quantity }}" required>
+                    </div>
+                    <!-- Unit Price Field -->
+                    <div class="form-group col-md-3">
+                        <label for="unit_price">Unit Price</label>
+                        <input type="number" class="form-control unit-price" name="unit_price[]" placeholder="Unit Price" step="0.01" value="{{ line_item.unit_price }}" required>
+                    </div>
+                    <!-- Remove Button -->
+                    <div class="form-group col-md-2">
+                        <button type="button" class="btn btn-danger remove-item">Remove</button>
+                    </div>
                 </div>
-                <!-- Quantity Field -->
-                <div class="form-group col-md-3">
-                    <label for="product_id">Quantity</label>
-
-                    <input type="number" class="form-control quantity" name="quantity[]" placeholder="Quantity" min="1" value="{{ line_item.quantity }}" required>
+                {% endfor %}
+            {% elif sales_order and sales_order.line_items %}
+                <!-- Loop through sales order line items if invoice is not present -->
+                {% for line_item in sales_order.line_items %}
+                <div class="line-item row mb-3">
+                    <!-- Product Dropdown -->
+                    <div class="form-group col-md-4">
+                        <label for="product_id">Product</label>
+                        <select class="form-control product-select" name="product_id[]" required>
+                            <option value="">-- Select Product --</option>
+                            {% for product in products %}
+                            <option value="{{ product.id }}" {% if line_item.product_id == product.id %}selected{% endif %}>
+                                {{ product.product_name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <!-- Quantity Field -->
+                    <div class="form-group col-md-3">
+                        <label for="quantity">Quantity</label>
+                        <input type="number" class="form-control quantity" name="quantity[]" placeholder="Quantity" min="1" value="{{ line_item.quantity }}" required>
+                    </div>
+                    <!-- Unit Price Field -->
+                    <div class="form-group col-md-3">
+                        <label for="unit_price">Unit Price</label>
+                        <input type="number" class="form-control unit-price" name="unit_price[]" placeholder="Unit Price" step="0.01" value="{{ line_item.unit_price }}" required>
+                    </div>
+                    <!-- Remove Button -->
+                    <div class="form-group col-md-2">
+                        <button type="button" class="btn btn-danger remove-item">Remove</button>
+                    </div>
                 </div>
-                <!-- Unit Price Field -->
-                <div class="form-group col-md-3">
-                    <label for="product_id">Unit Price</label>
-
-                    <input type="number" class="form-control unit-price" name="unit_price[]" placeholder="Unit Price" step="0.01" value="{{ line_item.unit_price }}" required>
+                {% endfor %}
+            {% else %}
+                <!-- Show an empty line item template if no line items are available -->
+                <div class="line-item row mb-3">
+                    <div class="form-group col-md-4">
+                        <label for="product_id">Product</label>
+                        <select class="form-control product-select" name="product_id[]" required>
+                            <option value="">-- Select Product --</option>
+                            {% for product in products %}
+                            <option value="{{ product.id }}">{{ product.product_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group col-md-3">
+                        <label for="quantity">Quantity</label>
+                        <input type="number" class="form-control quantity" name="quantity[]" placeholder="Quantity" min="1" required>
+                    </div>
+                    <div class="form-group col-md-3">
+                        <label for="unit_price">Unit Price</label>
+                        <input type="number" class="form-control unit-price" name="unit_price[]" placeholder="Unit Price" step="0.01" required>
+                    </div>
+                    <div class="form-group col-md-2">
+                        <button type="button" class="btn btn-danger remove-item">Remove</button>
+                    </div>
                 </div>
-                <!-- Remove Button -->
-                <div class="form-group col-md-2">
-                    <button type="button" class="btn btn-danger remove-item">Remove</button>
-                </div>
-            </div>
-            {% endfor %}
+            {% endif %}
         </div>
 
         <!-- Button to Add More Items -->
@@ -76,21 +146,21 @@
         <!-- Total Amount -->
         <div class="form-group mt-4">
             <label for="total_amount">Total Amount</label>
-            <input type="number" class="form-control" id="total_amount" name="total_amount" step="0.01" value="{{ invoice.total_amount }}" required readonly>
+            <input type="number" class="form-control" id="total_amount" name="total_amount" step="0.01" value="{{ invoice.total_amount if invoice else '' }}" required readonly>
         </div>
 
         <!-- Status -->
         <div class="form-group">
             <label for="status">Status</label>
             <select class="form-control" id="status" name="status" required>
-                <option value="Pending" {% if invoice.status == 'Pending' %}selected{% endif %}>Pending</option>
-                <option value="Paid" {% if invoice.status == 'Paid' %}selected{% endif %}>Paid</option>
-                <option value="Cancelled" {% if invoice.status == 'Cancelled' %}selected{% endif %}>Cancelled</option>
+                <option value="Pending" {% if invoice and invoice.status == 'Pending' %}selected{% endif %}>Pending</option>
+                <option value="Paid" {% if invoice and invoice.status == 'Paid' %}selected{% endif %}>Paid</option>
+                <option value="Cancelled" {% if invoice and invoice.status == 'Cancelled' %}selected{% endif %}>Cancelled</option>
             </select>
         </div>
 
         <!-- Submit Button -->
-        <button type="submit" class="btn btn-dark">Update Invoice</button>
+        <button type="submit" class="btn btn-dark">{{ 'Update Invoice' if invoice else 'Create Invoice' }}</button>
     </form>
 </div>
 
@@ -101,11 +171,9 @@ document.addEventListener('DOMContentLoaded', function () {
         var total = 0;
         var lineItems = document.querySelectorAll('.line-item');
         lineItems.forEach(function(item) {
-            var quantity = item.querySelector('input[name="quantity[]"]').value;
-            var unitPrice = item.querySelector('input[name="unit_price[]"]').value;
-            if (quantity && unitPrice) {
-                total += parseFloat(quantity) * parseFloat(unitPrice);
-            }
+            var quantity = item.querySelector('input[name="quantity[]"]').value || 0;
+            var unitPrice = item.querySelector('input[name="unit_price[]"]').value || 0;
+            total += parseFloat(quantity) * parseFloat(unitPrice);
         });
         document.getElementById('total_amount').value = total.toFixed(2);
     }
@@ -136,6 +204,7 @@ document.addEventListener('DOMContentLoaded', function () {
         newItem.querySelector('select').value = ''; // Clear the product select dropdown
         lineItemsSection.appendChild(newItem);
         addEventListenersToLineItem(newItem);
+        calculateTotal(); // Recalculate total after adding new item
     });
 });
 </script>

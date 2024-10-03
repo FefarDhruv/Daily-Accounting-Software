@@ -201,7 +201,7 @@ class BillLineItem(db.Model):
 
 # app.py or models.py
 
-# SalesOrder Model
+# Add this field in the SalesOrder model
 class SalesOrder(db.Model):
     __tablename__ = 'sales_order'
     id = db.Column(db.Integer, primary_key=True)
@@ -210,21 +210,19 @@ class SalesOrder(db.Model):
     order_date = db.Column(db.Date, nullable=False)
     total_amount = db.Column(db.Float, nullable=False)
     status = db.Column(db.String(50), nullable=False, default='Draft')
-
-    # New field to link SalesOrder to SetupOrganization
     organization_id = db.Column(db.Integer, db.ForeignKey('setup_organization.id'), nullable=False)
+    quote_id = db.Column(db.Integer, db.ForeignKey('quote.id'), nullable=True)  # Nullable if not all Sales Orders are created from Quotes
 
-    # New field to link SalesOrder to Quote
-    quote_id = db.Column(db.Integer, db.ForeignKey('quote.id'),
-                         nullable=True)  # Nullable if not all Sales Orders are created from Quotes
+    # New field to track the linked Invoice ID
+    invoice_id = db.Column(db.Integer, db.ForeignKey('invoice.id'), nullable=True)  # Nullable if the Sales Order is not invoiced
 
-    # Relationship with Customer, Organization, and Quote
+    # Relationships
     customer = db.relationship('Customer', backref=db.backref('sales_orders', lazy=True))
     organization = db.relationship('SetupOrganization', backref=db.backref('sales_orders', lazy=True))
     quote = db.relationship('Quote', backref=db.backref('sales_orders', lazy=True))  # Establish relationship with Quote
-
-    # Use a unique backref name to avoid conflict with the SalesOrderLineItem relationship
     line_items = db.relationship('SalesOrderLineItem', backref='order_ref', lazy=True, cascade="all, delete-orphan")
+    invoice = db.relationship('Invoice', backref=db.backref('sales_orders', lazy=True))  # Establish relationship with Invoice
+
 
 
 # SalesOrderLineItem Model
@@ -1530,21 +1528,34 @@ def invoice_list():
 @app.route('/create_invoice', methods=['GET', 'POST'])
 @login_required
 def create_invoice():
+    organization_id = session.get('organization_id')
+
+    # Fetch customers, products, and completed sales orders for dropdowns
+    customers = Customer.query.filter_by(organization_id=organization_id).all()
+    products = Product.query.filter_by(organization_id=organization_id).all()
+
+    # Fetch completed Sales Orders for selection in the form
+    completed_sales_orders = SalesOrder.query.filter_by(status='Completed', organization_id=organization_id).all()
+    print("Completed Sales Orders:", completed_sales_orders)
+
     if request.method == 'POST':
-        # Retrieve organization ID from session
-        organization_id = session.get('organization_id')
+        # Retrieve Sales Order ID if provided
+        sales_order_id = request.form.get('sales_order_id')
 
         # Auto-generate a unique invoice number
         last_invoice = Invoice.query.order_by(Invoice.id.desc()).first()
-        if last_invoice:
-            new_invoice_number = str(int(last_invoice.invoice_number) + 1)
-        else:
-            new_invoice_number = "1"  # Start with '1' if there are no invoices in the system
+        new_invoice_number = str(int(last_invoice.invoice_number) + 1) if last_invoice else "1"
 
+        # Get customer and other details
         customer_id = request.form['customer_id']
-        product_ids = request.form.getlist('product_id[]')
         invoice_date = datetime.strptime(request.form['invoice_date'], '%Y-%m-%d')
-        total_amount = float(request.form['total_amount'])
+
+        # Handle total amount with default value
+        try:
+            total_amount = float(request.form['total_amount']) if request.form['total_amount'] else 0.0
+        except ValueError:
+            total_amount = 0.0
+
         status = request.form['status']
 
         # Create a new Invoice object
@@ -1559,29 +1570,49 @@ def create_invoice():
         db.session.add(new_invoice)
         db.session.commit()
 
-        # Add line items to the Invoice
-        item_names = request.form.getlist('item_name[]')
-        quantities = request.form.getlist('quantity[]')
-        unit_prices = request.form.getlist('unit_price[]')
+        # If Sales Order ID is provided, use its line items to create the invoice
+        if sales_order_id:
+            sales_order = SalesOrder.query.get(sales_order_id)
+            for line_item in sales_order.line_items:
+                new_line_item = InvoiceLineItem(
+                    invoice_id=new_invoice.id,
+                    product_id=line_item.product_id,
+                    quantity=line_item.quantity,
+                    unit_price=line_item.unit_price
+                )
+                db.session.add(new_line_item)
 
-        for product_id, quantity, unit_price in zip(product_ids, quantities, unit_prices):
-            new_line_item = InvoiceLineItem(
-                invoice_id=new_invoice.id,
-                product_id=int(product_id),
-                quantity=int(quantity),
-                unit_price=float(unit_price)
-            )
-            db.session.add(new_line_item)
+            # Mark the Sales Order as 'Invoiced'
+            sales_order.status = 'Invoiced'
+            db.session.commit()
+
+        else:
+            # Add line items manually if Sales Order is not provided
+            product_ids = request.form.getlist('product_id[]')
+            quantities = request.form.getlist('quantity[]')
+            unit_prices = request.form.getlist('unit_price[]')
+
+            for product_id, quantity, unit_price in zip(product_ids, quantities, unit_prices):
+                if product_id and quantity and unit_price:
+                    try:
+                        quantity = int(quantity)
+                        unit_price = float(unit_price)
+                        new_line_item = InvoiceLineItem(
+                            invoice_id=new_invoice.id,
+                            product_id=int(product_id),
+                            quantity=quantity,
+                            unit_price=unit_price
+                        )
+                        db.session.add(new_line_item)
+                    except ValueError:
+                        flash(f"Invalid input for line item: {product_id}", 'danger')
 
         db.session.commit()
         flash('Invoice created successfully!', 'success')
         return redirect(url_for('invoice_list'))
+    return render_template('create_invoice.html', customers=customers, products=products, completed_sales_orders=completed_sales_orders)
 
-    # Fetch customers belonging to the user's organization for dropdown
-    organization_id = session.get('organization_id')
-    customers = Customer.query.filter_by(organization_id=organization_id).all()
-    products = Product.query.filter_by(organization_id=organization_id).all()  # Fetch products for the organization
-    return render_template('create_invoice.html', customers=customers, products=products)
+
 
 
 @app.route('/edit_invoice/<int:invoice_id>', methods=['GET', 'POST'])
@@ -1831,6 +1862,95 @@ def generate_sales_order_pdf(sales_order_id):
 
     # Return the generated PDF as a response
     return send_file(pdf, as_attachment=True, download_name=f"SalesOrder_{sales_order.order_number}.pdf", mimetype='application/pdf')
+
+@app.route('/create_invoice_from_sales_order/<int:sales_order_id>', methods=['GET', 'POST'])
+@login_required
+def create_invoice_from_sales_order(sales_order_id):
+    # Retrieve organization ID from session
+    organization_id = session.get('organization_id')
+
+    # Fetch the Sales Order details along with its line items
+    sales_order = SalesOrder.query.filter_by(id=sales_order_id, organization_id=organization_id).first_or_404()
+
+    # Print out the line items to verify if they are being retrieved
+    print(f"Sales Order Line Items for {sales_order_id}:")
+    for line_item in sales_order.line_items:
+        print(f"Product ID: {line_item.product_id}, Quantity: {line_item.quantity}, Unit Price: {line_item.unit_price}")
+
+    # Fetch customers and products to populate the dropdowns
+    customers = Customer.query.filter_by(organization_id=organization_id).all()
+    products = Product.query.filter_by(organization_id=organization_id).all()
+
+    # Additional code for creating or editing an invoice...
+
+    if request.method == 'POST':
+        # Get data from the form submission
+        invoice_number = request.form['invoice_number']
+        customer_id = request.form['customer_id']
+        invoice_date = datetime.strptime(request.form['invoice_date'], '%Y-%m-%d')
+        total_amount = request.form['total_amount']
+        status = request.form['status']
+
+        # Create a new Invoice object
+        new_invoice = Invoice(
+            invoice_number=invoice_number,
+            customer_id=customer_id,
+            invoice_date=invoice_date,
+            total_amount=float(total_amount) if total_amount else 0,
+            status=status,
+            organization_id=organization_id
+        )
+        db.session.add(new_invoice)
+        db.session.commit()
+
+        # Add line items to the invoice using the Sales Order line items
+        for line_item in sales_order.line_items:
+            new_invoice_line_item = InvoiceLineItem(
+                invoice_id=new_invoice.id,
+                product_id=line_item.product_id,
+                quantity=line_item.quantity,
+                unit_price=line_item.unit_price
+            )
+            db.session.add(new_invoice_line_item)
+
+        # Update the Sales Order to link it with the new Invoice
+        sales_order.invoice_id = new_invoice.id
+        sales_order.status = 'Invoiced'
+        db.session.commit()
+
+        flash('Invoice created successfully!', 'success')
+        return redirect(url_for('sales_order_list'))
+
+    # Pass the sales_order object to the template
+    return render_template(
+        'create_invoice.html',
+        customers=customers,
+        products=products,
+        sales_order=sales_order,  # Pass sales_order to the template
+        show_logo=True,
+        active_tab='invoice'
+    )
+
+# app.py
+
+@app.route('/get_sales_order_line_items/<int:sales_order_id>', methods=['GET'])
+@login_required
+def get_sales_order_line_items(sales_order_id):
+    # Retrieve organization ID from session
+    organization_id = session.get('organization_id')
+
+    # Get the sales order based on the given ID and organization ID
+    sales_order = SalesOrder.query.filter_by(id=sales_order_id, organization_id=organization_id).first_or_404()
+
+    # Prepare the line items data to be sent as a response
+    line_items = [{
+        'product_id': line_item.product_id,
+        'product_name': line_item.product.product_name,
+        'quantity': line_item.quantity,
+        'unit_price': line_item.unit_price
+    } for line_item in sales_order.line_items]
+
+    return jsonify(line_items)
 
 if __name__ == '__main__':
     app.run(debug=True)
