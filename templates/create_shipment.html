@@ -1,3 +1,4 @@
+<!-- templates/create_shipment.html -->
 {% extends "base.html" %}
 
 {% block title %}Create Shipment{% endblock %}
@@ -11,15 +12,16 @@
         <!-- Shipment Number -->
         <div class="form-group">
             <label for="shipment_number">Shipment Number</label>
-            <input type="text" class="form-control" id="shipment_number" name="shipment_number" required>
+            <input type="text" class="form-control" id="shipment_number" name="shipment_number" placeholder="Enter Shipment Number" required>
         </div>
 
         <!-- Invoice Select -->
         <div class="form-group">
             <label for="invoice_id">Select Invoice</label>
-            <select class="form-control" id="invoice_id" name="invoice_id" required>
+            <select name="invoice_id" class="form-control" id="invoice_id" required>
+                <option value="">-- Select Invoice --</option>
                 {% for invoice in invoices %}
-                <option value="{{ invoice.id }}">{{ invoice.invoice_number }}</option>
+                <option value="{{ invoice.id }}">{{ invoice.invoice_number }} - {{ invoice.customer.customer_name }}</option>
                 {% endfor %}
             </select>
         </div>
@@ -33,21 +35,22 @@
         <!-- Carrier -->
         <div class="form-group">
             <label for="carrier">Carrier</label>
-            <input type="text" class="form-control" id="carrier" name="carrier">
+            <input type="text" class="form-control" id="carrier" name="carrier" placeholder="Enter Carrier Name">
         </div>
 
         <!-- Tracking Number -->
         <div class="form-group">
             <label for="tracking_number">Tracking Number</label>
-            <input type="text" class="form-control" id="tracking_number" name="tracking_number">
+            <input type="text" class="form-control" id="tracking_number" name="tracking_number" placeholder="Enter Tracking Number">
         </div>
 
         <!-- Status -->
         <div class="form-group">
             <label for="status">Status</label>
-            <select class="form-control" id="status" name="status" required>
+            <select name="status" class="form-control" id="status" required>
                 <option value="Pending">Pending</option>
-                <option value="Completed">Completed</option>
+                <option value="Shipped">Shipped</option>
+                <option value="Delivered">Delivered</option>
                 <option value="Cancelled">Cancelled</option>
             </select>
         </div>
@@ -55,16 +58,16 @@
         <!-- Stage -->
         <div class="form-group">
             <label for="stage">Stage</label>
-            <select class="form-control" id="stage" name="stage" required>
-                <option value="Pending">Pending</option>
-                <option value="Shipped">Shipped</option>
+            <select name="stage" class="form-control" id="stage" required>
+                <option value="Packing">Packing</option>
                 <option value="In Transit">In Transit</option>
+                <option value="Out for Delivery">Out for Delivery</option>
                 <option value="Delivered">Delivered</option>
-                <option value="Cancelled">Cancelled</option>
             </select>
         </div>
 
-        <button type="submit" class="btn btn-dark">Create Shipment</button>
+        <!-- Submit Button -->
+        <button type="submit" class="btn btn-primary">Create Shipment</button>
     </form>
 </div>
 {% endblock %}

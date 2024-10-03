@@ -1690,70 +1690,6 @@ def delete_invoice(invoice_id):
 
 
 
-@app.route('/shipment_list')
-@login_required
-def shipment_list():
-    organization_id = session.get('organization_id')
-    shipments = Shipment.query.join(Invoice).filter(
-        Invoice.organization_id == organization_id,
-        Shipment.organization_id == organization_id
-    ).all()
-    return render_template('shipment_list.html', shipments=shipments, show_logo=True, active_tab='shipment')
-
-
-@app.route('/create_shipment', methods=['GET', 'POST'])
-@login_required
-def create_shipment():
-    if request.method == 'POST':
-        shipment_number = request.form['shipment_number']
-        invoice_id = request.form['invoice_id']
-        shipment_date = datetime.strptime(request.form['shipment_date'], '%Y-%m-%d')
-        carrier = request.form['carrier']
-        tracking_number = request.form['tracking_number']
-        status = request.form['status']
-        stage = request.form['stage']
-        organization_id = session.get('organization_id')
-
-        new_shipment = Shipment(
-            shipment_number=shipment_number,
-            invoice_id=invoice_id,
-            shipment_date=shipment_date,
-            carrier=carrier,
-            tracking_number=tracking_number,
-            status=status,
-            stage=stage,
-            organization_id=organization_id
-        )
-        db.session.add(new_shipment)
-        db.session.commit()
-        flash('Shipment created successfully!', 'success')
-        return redirect(url_for('shipment_list'))
-
-    invoices = Invoice.query.filter_by(organization_id=session.get('organization_id')).all()
-    return render_template('create_shipment.html', invoices=invoices, show_logo=True, active_tab='shipment')
-
-
-@app.route('/edit_shipment/<int:shipment_id>', methods=['GET', 'POST'])
-@login_required
-def edit_shipment(shipment_id):
-    shipment = Shipment.query.get_or_404(shipment_id)
-    if request.method == 'POST':
-        shipment.shipment_number = request.form['shipment_number']
-        shipment.invoice_id = request.form['invoice_id']
-        shipment.shipment_date = datetime.strptime(request.form['shipment_date'], '%Y-%m-%d')
-        shipment.carrier = request.form['carrier']
-        shipment.tracking_number = request.form['tracking_number']
-        shipment.status = request.form['status']
-        shipment.stage = request.form['stage']
-
-        db.session.commit()
-        flash('Shipment updated successfully!', 'success')
-        return redirect(url_for('shipment_list'))
-
-    invoices = Invoice.query.filter_by(organization_id=session.get('organization_id')).all()
-    return render_template('edit_shipment.html', shipment=shipment, invoices=invoices, show_logo=True, active_tab='shipment')
-
-
 @app.route('/update_shipment_status/<int:shipment_id>', methods=['POST'])
 @login_required
 def update_shipment_status(shipment_id):
@@ -1777,14 +1713,6 @@ def update_shipment_status(shipment_id):
         return jsonify({'error': 'Failed to update shipment status'}), 500
 
 
-@app.route('/delete_shipment/<int:shipment_id>', methods=['POST'])
-@login_required
-def delete_shipment(shipment_id):
-    shipment = Shipment.query.get_or_404(shipment_id)
-    db.session.delete(shipment)
-    db.session.commit()
-    flash('Shipment deleted successfully!', 'success')
-    return redirect(url_for('shipment_list'))
 
 
 @app.route('/generate_bill_pdf/<int:bill_id>', methods=['GET'])
@@ -1991,6 +1919,121 @@ def generate_invoice_pdf(invoice_id):
     # Return the generated PDF as a response
     return send_file(pdf, as_attachment=True, download_name=f"Invoice_{invoice.invoice_number}.pdf", mimetype='application/pdf')
 
+# View all shipments
+@app.route('/shipment_list')
+@login_required
+def shipment_list():
+    organization_id = session.get('organization_id')
+    shipments = Shipment.query.join(Invoice).filter(
+        Invoice.organization_id == organization_id,
+        Shipment.organization_id == organization_id
+    ).all()
+    return render_template('shipment_list.html', shipments=shipments, show_logo=True, active_tab='shipment')
+
+
+@app.route('/create_shipment', methods=['GET', 'POST'])
+@login_required
+def create_shipment():
+    if request.method == 'POST':
+        shipment_number = request.form['shipment_number']
+        invoice_id = request.form['invoice_id']
+        shipment_date = datetime.strptime(request.form['shipment_date'], '%Y-%m-%d')
+        carrier = request.form['carrier']
+        tracking_number = request.form['tracking_number']
+        status = request.form['status']
+        stage = request.form['stage']
+        organization_id = session.get('organization_id')
+
+        new_shipment = Shipment(
+            shipment_number=shipment_number,
+            invoice_id=invoice_id,
+            shipment_date=shipment_date,
+            carrier=carrier,
+            tracking_number=tracking_number,
+            status=status,
+            stage=stage,
+            organization_id=organization_id
+        )
+        db.session.add(new_shipment)
+        db.session.commit()
+        flash('Shipment created successfully!', 'success')
+        return redirect(url_for('shipment_list'))
+
+    # Fetch invoices belonging to the user's organization that are not linked to an existing shipment
+    organization_id = session.get('organization_id')
+    invoices = Invoice.query.filter_by(organization_id=organization_id).all()  # Adjust the filter condition as needed
+    return render_template('create_shipment.html', invoices=invoices, show_logo=True, active_tab='shipment')
+
+
+# Edit an existing shipment
+@app.route('/edit_shipment/<int:shipment_id>', methods=['GET', 'POST'])
+@login_required
+def edit_shipment(shipment_id):
+    shipment = Shipment.query.get_or_404(shipment_id)
+    organization_id = session.get('organization_id')
+    invoices = Invoice.query.filter_by(organization_id=organization_id, status='Invoiced').all()
+
+    if request.method == 'POST':
+        shipment.shipment_number = request.form['shipment_number']
+        shipment.invoice_id = request.form['invoice_id']
+        shipment.shipment_date = datetime.strptime(request.form['shipment_date'], '%Y-%m-%d')
+        shipment.carrier = request.form['carrier']
+        shipment.tracking_number = request.form['tracking_number']
+        shipment.status = request.form['status']
+        shipment.stage = request.form['stage']
+
+        db.session.commit()
+        flash('Shipment updated successfully!', 'success')
+        return redirect(url_for('shipment_list'))
+
+    return render_template('edit_shipment.html', shipment=shipment, invoices=invoices, show_logo=True, active_tab='shipment')
+
+
+# Delete a shipment
+@app.route('/delete_shipment/<int:shipment_id>', methods=['POST'])
+@login_required
+def delete_shipment(shipment_id):
+    shipment = Shipment.query.get_or_404(shipment_id)
+
+    try:
+        db.session.delete(shipment)
+        db.session.commit()
+        flash('Shipment deleted successfully!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'An error occurred while deleting the shipment: {str(e)}', 'danger')
+
+    return redirect(url_for('shipment_list'))
+
+
+# Fetch invoice details for auto-population
+@app.route('/get_invoice_details/<int:invoice_id>', methods=['GET'])
+@login_required
+def get_invoice_details(invoice_id):
+    organization_id = session.get('organization_id')
+    invoice = Invoice.query.filter_by(id=invoice_id, organization_id=organization_id).first_or_404()
+
+    # Retrieve invoice line items
+    line_items = [
+        {
+            'product_id': line_item.product_id,
+            'product_name': line_item.product.product_name,
+            'quantity': line_item.quantity,
+            'unit_price': line_item.unit_price
+        }
+        for line_item in invoice.line_items
+    ]
+
+    # Prepare data to return as JSON
+    invoice_details = {
+        'invoice_number': invoice.invoice_number,
+        'customer_id': invoice.customer_id,
+        'invoice_date': invoice.invoice_date.strftime('%Y-%m-%d'),
+        'total_amount': invoice.total_amount,
+        'line_items': line_items
+    }
+
+    return jsonify(invoice_details)
 
 
 if __name__ == '__main__':
