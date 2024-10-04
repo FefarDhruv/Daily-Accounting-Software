@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Profit and Loss Dashboard</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container mt-5">
+        <h1 class="text-center">Profit and Loss Dashboard</h1>
+
+        <!-- Display Total Revenue -->
+        <div class="row mt-4">
+            <div class="col-md-4">
+                <div class="card text-white bg-success">
+                    <div class="card-header">Total Revenue</div>
+                    <div class="card-body">
+                        <h3 class="card-title">Rs{{ data.total_revenue }}</h3>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Display Total Expenses -->
+            <div class="col-md-4">
+                <div class="card text-white bg-danger">
+                    <div class="card-header">Total Expenses</div>
+                    <div class="card-body">
+                        <h3 class="card-title">Rs{{ data.total_expenses }}</h3>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Display Profit/Loss -->
+            <div class="col-md-4">
+                <div class="card text-white bg-primary">
+                    <div class="card-header">Net Profit/Loss</div>
+                    <div class="card-body">
+                        <h3 class="card-title">Rs{{ data.profit_loss }}</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bar Chart for Revenue and Expenses -->
+        <div class="row mt-5">
+            <div class="col-md-12">
+                <canvas id="profitLossChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chart.js Script for Bar Chart -->
+    <script>
+        var ctx = document.getElementById('profitLossChart').getContext('2d');
+        var profitLossChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['Revenue', 'Expenses', 'Profit/Loss'],
+                datasets: [{
+                    label: 'Amount in USD',
+                    data: [{{ data.total_revenue }}, {{ data.total_expenses }}, {{ data.profit_loss }}],
+                    backgroundColor: ['#28a745', '#dc3545', '#007bff']
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>

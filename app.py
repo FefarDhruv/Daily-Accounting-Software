@@ -3,6 +3,7 @@ from flask import Flask, render_template, request, redirect, url_for, flash, ses
 from xhtml2pdf import pisa
 import pdfkit
 from io import BytesIO
+from sqlalchemy import func
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.exc import IntegrityError  # Import IntegrityError
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -140,6 +141,10 @@ class Bill(db.Model):
     bill_date = db.Column(db.Date, nullable=False)
     total_amount = db.Column(db.Float, nullable=False)
     status = db.Column(db.String(50), nullable=False)
+    organization_id = db.Column(db.Integer, db.ForeignKey('setup_organization.id'),
+                                nullable=False)  # Foreign key to organization
+
+    organization = db.relationship('SetupOrganization', backref=db.backref('bills', lazy=True))
 
     # Relationship with PurchaseOrder
     purchase_order = db.relationship('PurchaseOrder', backref=db.backref('bills', lazy=True))
@@ -388,7 +393,7 @@ def login_required(f):
 
 # Setup Organization Page (Used for Initial Setup)
 @app.route('/setup_organization', methods=['GET', 'POST'])
-@login_required
+# @login_required
 def setup_organization():
     if request.method == 'POST':
         org_name = request.form['org_name']
@@ -423,7 +428,6 @@ def setup_organization():
 
 # Add Users Page
 @app.route('/add_users', methods=['GET', 'POST'])
-@login_required
 def add_users():
     if request.method == 'POST':
         usernames = request.form.getlist('username[]')
@@ -877,14 +881,24 @@ def create_bill():
         total_amount = request.form['total_amount']
         status = request.form['status']
 
+        # Retrieve the organization_id from the session or other means
+        organization_id = session.get('organization_id')
+
+        if not organization_id:
+            flash('Organization not found. Please log in again.', 'danger')
+            return redirect(url_for('login'))
+
         # Create the Bill
         new_bill = Bill(
             bill_number=bill_number,
             purchase_order_id=purchase_order_id,
             bill_date=bill_date,
             total_amount=total_amount,
-            status=status
+            status=status,
+            organization_id=organization_id  # Ensure organization_id is set here
         )
+
+        # Add the bill to the database
         db.session.add(new_bill)
         db.session.commit()
 
@@ -914,6 +928,7 @@ def create_bill():
     # Only show purchase orders that are not billed
     purchase_orders = PurchaseOrder.query.filter(PurchaseOrder.status != 'Billed').all()
     return render_template('create_bill.html', purchase_orders=purchase_orders)
+
 
 # Edit Bill Route
 @app.route('/edit_bill/<int:bill_id>', methods=['GET', 'POST'])
@@ -2246,6 +2261,32 @@ def add_stock_movement(inventory_id):
         return redirect(url_for('inventory_list'))
 
     return render_template('add_stock_movement.html', inventory_item=inventory_item, active_tab='inventory')
+
+# Define the dashboard route
+@app.route('/dashboard')
+@login_required
+def dashboard():
+    # Retrieve the organization_id from the session
+    organization_id = session.get('organization_id')
+
+    # Fetch total revenue from invoices for the organization
+    total_revenue = db.session.query(func.sum(Invoice.total_amount)).filter(Invoice.organization_id == organization_id).scalar() or 0
+
+    # Fetch total expenses from bills for the organization
+    total_expenses = db.session.query(func.sum(Bill.total_amount)).filter(Bill.organization_id == organization_id).scalar() or 0
+
+    # Calculate profit/loss
+    profit_loss = total_revenue - total_expenses
+
+    # Prepare data for rendering in the dashboard
+    data = {
+        'total_revenue': total_revenue,
+        'total_expenses': total_expenses,
+        'profit_loss': profit_loss
+    }
+
+    return render_template('dashboard.html', data=data, show_logo=True, active_tab='dashboard')
+
 
 if __name__ == '__main__':
     app.run(debug=True)
