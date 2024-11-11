@@ -1,0 +1,14 @@
+Flask
+Flask-SQLAlchemy
+Flask-Migrate
+Flask-WTF
+Werkzeug
+pdfkit
+xhtml2pdf
+weasyprint
+SQLAlchemy
+psycopg2-binary  # For PostgreSQL (use this only if needed)
+PyMySQL  # For MySQL (use this only if needed)
+bcrypt
+python-dotenv
+WTForms
